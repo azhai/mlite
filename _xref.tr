@@ -1,0 +1,10 @@
+.nr R8 2
+.nr R5 9
+.nr R6 15
+.nr R4 31
+.nr R2 32
+.nr R1 32
+.nr R7 33
+.nr RA 36
+.nr R3 39
+.nr RB 56

@@ -1,0 +1,28 @@
+20141229 Fixed a bug that could cause ~= to crash when autoscaling failed.
+20141217 Fixed to_radix (radix.m) for 0 input.
+20141203 Fixed ntos for reals ending in ".0".
+20141203 Fixed ~= and ~<> operators (auto-scaling before comparison now).
+20141202 Fixed comparison (=,<>) of strings of unequal length.
+20141202 Fixed precision of pi in trig.m. Thanks, Bruce!
+20141201 Tentatively increased mantissa size to 36 digits.
+20141201 Added n'th root function (nthroot) to core library.
+20141127 Changed realnum semantics of ~<> and ~= ((not) approx. equal).
+20141127 Fixed x^y with fractional y. Thanks, Bruce "Bugmagnet" Axtens!
+20141124 Grouping does not work in implicit guards. No fix for now.
+20141121 Made ^ reject fractional exponents with no useful approximation.
+20141120 Made << and >> operators associate to the right.
+20141119 Started test suite.
+20141118 Added negative exponents in real number literals, e.g. 1e~5.
+20141118 Added more multi-character char literals, like #"\"", etc.
+20141116 Made the ^ operator accept a non-integer exponent.
+20141112 Fixed broken real number parser. Thanks again, Bruce Axtens!
+20141107 Fix: compiler missed some errors (currying in alternative patterns).
+20141031 Closed a massive GC leak in the div and rem functions.
+20141030 Protected redirected I/O streams from GC.
+20141030 Made #! a comment to end of line.
+20141027 Documented the foreach function. Thanks, Bruce Axtens!
+20141027 Added the ntos and ston functions (num/str conversion). Thanks, Bruce!
+20141018 Renamed library path environment variable (MLITE_LIBRARY_PATH).
+20141018 Made :: a valid type name in constructors, e.g. type :x = :y (::)
+20141014 Fixed a bug that could crash the compiler. Thanks, James Turner!
+20141014 Removed POSIX prelude (not required).

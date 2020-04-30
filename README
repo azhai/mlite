@@ -1,0 +1,78 @@
+
+	mLite Interpreter
+	By Nils M Holm, 2014
+
+	mLite is a general-purpose, functional, lightweight, dynamic
+	programming language. It borrows ideas from both the Scheme
+	and Standard ML languages, taking most of its syntax from ML
+	and its dynamic nature from Scheme. It extends ML-style
+	pattern matching by adding guarded patterns and also introduces
+	the principle of "implicit guards".
+
+
+	COMPILING AND INSTALLING
+
+	mLite is written in pure ANSI C and should compile pretty much
+	anywhere. Just run "make" or even "cc mlite.c".
+
+	The interpreter will run fine in its build directory. Type
+	"make install" to install it to /usr/local (or edit Makefile).
+
+	"make test" runs a rudimentary test suite.
+
+
+	DOCUMENTATION
+
+	The manual can be found in "mll.ps" after running "make", given
+	you have groff/eqn/tbl installed. DO NOT try to create ASCII
+	output from the manual, it *will* be wrong and/or unreadable.
+
+	The paper on implicit guards can be found in "mll-guards.ps".
+	Note that the paper uses Allman's -me macro package, so you
+	will need a copy of that (it's usually in me.tmac in the troff
+	macro directory).
+
+	There is a bare-bones quick reference in "mlite.txt", but I
+	would really recommend to read the manual instead.
+
+	In case you are not able to compile the manual, ready-made PS
+	and PDF files can be found on the mLite home page:
+
+	http://t3x.org/mlite/manual.html
+
+	A PDF of the manual is also included in this archive.
+
+
+	ADDITIONAL FUNCTIONS
+
+	On Unix systems
+
+
+	GETTING STARTED
+
+	If you know ML, things will be quite obvious to you. mLite omits
+	the elaboration step (does not do static type analysis) and does
+	not have modules, but otherwise looks a lot like SML or OCaml.
+	See the appendix of the manual for a summary of differences to ML.
+
+	One large difference is, maybe, that currying cannot be combined
+	with alternative patterns (| operator), so you have to write
+
+		fun pow (x, 0) = 1 | (x, y) = x * pow (x, y-1)
+
+	instead of
+
+		fun pow x 0 = 1 | pow x y = x * pow (x, y-1)
+
+	To get currying, you would have to use something like
+
+		local
+		  fun p (x, 0) = 1 | (x, y) = x * p (x, y-1)
+		in
+		  fun pow x y = p (x, y)
+		end
+
+	The file "util.m" contains some example programs, like Quicksort,
+	generating permutations, etc. Feel free to explore it. The mLite
+	library functions are defined in mlite.m.
+

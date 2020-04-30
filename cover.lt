@@ -1,0 +1,104 @@
+@Include { TechBook }
+@Use { @BookSetup
+	@HideBBoxes { Yes }
+	@Spacing { 1.1fx }
+	@DocumentWidth { 12.36i }
+	@DocumentHeight { 9.25i }
+	@TopMargin { 0c }
+	@BottomMargin { 0c }
+	@LeftMargin { 0c }
+	@RightMargin { 0c }
+	@SkipPageNos { 1 }
+	@BaseFont { Helvetica Roman 12p }
+}
+@Document
+//
+@Text @Begin
+{
+	"/"box "{"
+		"/"dy exch def
+		"/"dx exch def
+		"/"y exch def
+		"/"x exch def
+		x y moveto
+		dx y lineto
+		dx dy lineto
+		x dy lineto
+		x y lineto
+		closepath
+		fill
+	"}" def
+	"/"sy ysize 100 div def
+	"/"sx xsize 100 div def
+	1.0 1.0 0.75 setrgbcolor
+	0 0 xsize ysize box
+}
+@Graphic @VExpand @HExpand {
+
+//0.125i ||0.125i
+@BBox @color { 0 0 0 setrgbcolor } 8.5i @Wide @VExpand @HExpand {
+	//4.1c ||1.0i
+	 { 0.3 0.3 0.3 setrgbcolor } @SetColor
+	 { Helvetica Bold 12p } @Font {
+}
+	||1.0i //0.1i
+}
+|
+@BBox @color { 0 0 0 setrgbcolor } 0.11i @Wide @VExpand @HExpand {
+||0.5rt {//5.0c -90d @Rotate {
+	 { 0.5 0.0 0.0 setrgbcolor } @SetColor
+	 { Helvetica Bold 8p } @Font {
+	 {@B{Holm} &2su @Dash &2su The mLite Programming Language}
+	 } }
+}
+}
+|
+@BBox @color { 0 0 0 setrgbcolor } 8.5i @Wide @VExpand @HExpand {
+	 //4.10c
+	 { 0.5 0.0 0.0 setrgbcolor } @SetColor {
+	 { Helvetica Roman 30p } @Font {
+	 ||0.5rt { The }
+	 //0.5c
+	 ||0.5rt {
+	 {
+	 	1.0 1.0 1.0 setrgbcolor
+		0 0 moveto
+		xsize 0 lineto
+		xsize ysize lineto
+		0 ysize lineto
+		0 0 lineto
+		closepath
+		fill
+	 	1.0 0.0 0.0 setrgbcolor
+		20 setlinewidth
+		0 0 moveto
+		xsize 0 lineto
+		xsize ysize lineto
+		0 ysize lineto
+		0 0 lineto
+		closepath
+		stroke
+	 }
+	 @Graphic {
+	 { Helvetica Roman 72p } @Font { 0 setgray } @SetColor {
+	 //0.2c ||0.2c
+	 m & { 1 0 0 setrgbcolor } @SetColor {L} & ite &0.1c
+	 ||0.2c //0.2c
+	 }}} || {}
+	 //0.5c
+	 ||0.5rt { Programming Language }
+	 }
+	 //1.5c
+	 { 0.5 0.0 0.0 setrgbcolor } @SetColor {
+	 { Helvetica Bold 20p } @Font {
+	 ||0.5rt { Nils &1.0su M &1.0su Holm }
+	 }
+	 }
+	 }//
+}
+
+||0.125i //0.125i
+
+}
+
+@End @Text

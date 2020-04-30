@@ -1,0 +1,3618 @@
+.EQ
+delim $$
+gsize 12
+.EN
+.so paper
+.so _xref.tr
+.AB "The mLite Language" "Nils M Holm, 2014"
+.sp
+.po +0.5i
+.ll -1i
+.B mLite
+is a general-purpose, functional, lightweight, dynamic programming
+language. It borrows ideas from both the Scheme [R4RS] and Standard ML
+[DEFSML] languages, taking most of its syntax from ML and its dynamic
+nature from Scheme. It extends ML-style pattern matching by adding
+guarded patterns and also introduces the principle of
+.I "implicit guards" .
+The implementation presented here is intended to be portable and
+easily realized on top of existing Scheme systems.
+.S
+.ll +1i
+.po -0.5i
+.nr VV 0
+.HD "Contents"
+.nr VV 1
+.sp
+.ta 2.0i 2.3i 4.3i
+.tc
+.nf
+.ps -2
+.vs -2
+.so _toc.tr
+.ps
+.vs
+.fi
+.ta
+.tc
+.TL ""
+.bp
+.HD "Introduction"
+.PA
+mLite is a functional language with immutable data types (with the
+exception of vectors), which reduces surprises in the process of program
+development to a minimum. Its syntax is lightweight and math-oriented.
+Here is a simple example that creates a list of numbers ($"iota"$),
+and then uses a generic $extract$ function to extract all multiples of
+7 from such a list:
+.X R8
+.PQ
+.S
+.EQ L
+fun ~ "iota" ~ mark (0, a) = a
+.EN
+.br
+.EQ L
+       | ~ lineup (x, a) = "iota" ~ (x \(mi 1, x ~::~ a) 
+.EN
+.br
+.EQ L
+       | ~ lineup x = "iota" ~ (x, \fR[]\fP)
+.EN
+.S
+.EQ L
+fun ~ extract ~ mark (f, []) = []
+.EN
+.br
+.EQ L
+| ~ lineup (f, f ~ x ~::~ xs) = x ~::~ extract ~ (f, xs)
+.EN
+.br
+.EQ L
+| ~ lineup (f, x ~::~ xs) = extract ~ (f, xs);
+.EN
+.S
+.EQ
+extract (fn ~ x = x ~ mod ~ 7 = 0, "iota" ~ 123)
+.EN
+.PA
+mLite makes extensive use of
+.I "pattern matching" .
+All functions are unary, and
+multiple arguments are passed to functions in tuples and destructured by
+patterns. Tuples are delimited by parentheses and their elements are
+separated by commas. Lists use square brackets instead of parentheses.
+.PQ
+.PA
+Lists and tuples are built dynamically in expressions (but not in patterns),
+so $[1+2, 3+4]$ gives $[3,7]$ and $(a,b)$ would be a tuple containing the
+values of the variables $a$ and $b$.
+.PQ
+.PA
+$::$ is the ``cons'' operator that adds a new element to the front of a list.
+When it appears in a pattern, it breaks up a list into its head (first
+element) and tail (rest of elements).
+.PQ
+.PA
+Each function contains a set of pattern/expression pairs of the
+form
+.PQ
+.EQ
+pattern sub 1 = expression sub 1 ~ | ~ ...
+.EN
+.PA
+The vertical bar is used to separate multiple pattern/expression pairs.
+When a function is applied to a value, the value is matched against
+each pattern in sequence, binding variables in the pattern to corresponding
+components in the argument. When the match succeeds, the associated
+expression is evaluated with the bindings in effect. In case of a mismatch,
+the remaining patterns are tried. When no more patterns are left to try,
+an error is reported.
+.PQ
+.PA
+Patterns may contain implicit or explicit guards that place further
+constraints on the values that match a pattern. For example, the
+second pattern of $extract$ matches only if $f$ applied to $x$ is true.
+.PQ
+.PA
+Functions for destructuring compound data objects, like car/cdr or
+first/rest in Lisp are rarely used, as pattern matching does the same
+job, but more intuitively:
+.PQ
+.S
+.EQ
+fun ~ head ~ (h ~::~ t) = h
+.EN
+.br
+.EQ
+fun ~ tail ~ (h ~::~ t) = t
+.EN
+.PA
+The $head$/$tail$ functions are mostly used in higher-order constructs.
+.PQ
+.sp -1
+.SH "Pattern Matching"
+.PA
+Function application matches data objects against patterns. Patterns
+may be any data objects themselves, and they may or may not contain
+variables. All literal objects match themselves. For instance, the objects
+.PQ
+.S
+.EQ
+0 ~~ 123.45 ~~ "\"hello\"" ~~ #"\"x"\" ~~ () ~~ [] ~~ true
+.EN
+.PA
+would match themselves exactly (with the usual caveats regarding
+real numbers in mind). Note that $true$ is the ``truth'' constant and
+not a variable.
+.PQ
+.PA
+Tuples and lists are matched element-wise, so
+.PQ
+.PA
+$(1, 2, 3)$ matches $(1, 2, 3)$
+and
+.br
+$[1, 2, 3]$ matches $[1, 2, 3]$
+.PQ
+.PA
+Nested lists and tuples as well as lists containing tuples and tuples
+containing lists are matched recursively, so even this data object
+would match itself:
+.PQ
+.S
+.EQ
+[(1, 2), (2, 4), (3, 9)]
+.EN
+.PA
+Things get more interesting, though, when a pattern contains variables.
+For instance,
+.PQ
+.S
+.EQ
+[(1, x)]
+.EN
+.PA
+would match any list containing a 2-tuple with a 1 in the first slot of
+the tuple.
+.I "In addition
+it would
+.I bind
+the $x$ in the pattern to the value in the corresponding data object,
+so matching
+.PQ
+.PA
+$[(1, x)]$ against $[(1, 23)]$
+.PQ
+.PA
+would bind $x$ to 23.
+.PQ
+.PA
+Patterns may also contain
+.I constructors ,
+like $::$. In an expression, $::$ adds a new element to the front of a
+list, but in a pattern it deconstructs a list, so matching
+.PQ
+.PA
+$(1, x) ~::~ t$ against $[(1, 23), (2, 34), (3, 45)]$
+.PQ
+.PA
+would bind $x$ to 23 and $t$ to $[(2, 34), (3, 45)]$.
+.PQ
+.PA
+Patterns containing the $::$ constructor are frequently put in
+parentheses for greater clarity, but this is not a syntactic necessity.
+.PQ
+.PA
+When the identifier $_$
+appears in a pattern, it matches any data object, just like a variable,
+but no value is bound. For instance, in the $length$ function, which
+computes the number of elements of a list, we are not interested in
+the values of the individual list elements, so we use $_$ instead of a
+variable:
+.PQ
+.S
+.EQ L
+fun ~ length ~ mark [] = 0
+.EN
+.br
+.EQ L
+| ~ lineup (_ ~ :: ~ t) = 1 + len ~ t
+.EN
+.PA
+The complete pattern matching algorithm can be found in the mLite Reference
+(pg \n(R1).
+.PQ
+.sp -1
+.SH "Syntax and Informal Semantics"
+.PA
+mLite expressions are based upon function application and infix operators.
+The usual operators exist:
+.PQ
+.S
+.EQ
+x+y; ~~ x-y; ~~ x*y; ~~ x/y; ~~ x~div~y; ~~ x~rem~y;
+.EN
+.EQ
+x=y; ~~ x<y; ~~ x<>y; ~~ x"<="y; ~~ x">="y; ~~ ...
+.EN
+.br
+.PA
+There are also operators for ``consing'' an element to a list ($::$)
+and for appending lists and strings ($@$).
+.PQ
+.PA
+Many operators are
+.I polymorphic ,
+like $@$. Other examples include the comparison operators
+($=$, $<$, $<>$, etc), which can be used to compare not only numbers,
+but also characters and strings.
+.PQ
+.PA
+There are case-insensitive counterparts to the comparison operators
+that begin with a tilde ($"~"$).  For example, $a"~"=b$ tests whether the
+strings or characters $a$ and $b$ are the same after folding their case.
+When applied to numbers, there is no difference between case-sensitive
+and case-insensitive operators, e.g. $x=y$ is equal to $x"~="y$, if
+both $x$ and $y$ are numeric.
+.PQ
+.sp -1
+.SU "Function Application"
+.PA
+Function application is denoted by juxtaposition and associates to the
+left. E.g. the expression $f~x~y$ is the same as $(f~x)~y$. It first
+applies $f$ to $x$ and the result of $f~x$ to $y$.
+.PQ
+.PA
+This notation is particularly useful in combination with higher-order
+functions. For instance, $map$ is a function of a function $f$ to a
+function which maps $f$ over its argument. So:
+.PQ
+.S
+.EQ
+map ~ (fn ~ x=x*x) ~~->~~ fn ~ a
+.EN
+.br
+.EQ
+map ~ (fn ~ x=x*x) ~ [1,2,3] ~~->~~ [1,4,9]
+.EN
+.PA
+($a -> b$ means ``$a$ maps to $b$'' or ``$a$ evaluates to $b$''.)
+.PQ
+.PA
+Parentheses can be used to override the precedence and associativity of
+all operators and function application. See the mLite Reference for a list
+of all predefined operators (pg \n(R2) and functions (pg \n(R3).
+.PQ
+.PA
+Alternatively, the apply ($`$)
+operator can be used to change the associativity of function application.
+It is a low-precedence operator that applies its left-hand side to its
+right-hand side, so
+.PQ
+.S
+.EQ
+f ~`~ g ~`~ x * y
+.EN
+.PA
+would be equal to $f ~ (g ~ (x * y))$.
+This is the same as Haskell's ``dollar'' operator.
+.PQ
+.PA
+The $fn$ keyword introduces an anonymous function, just like ``lambda''
+in Scheme. Functions defined with $fn$ may have multiple patterns, just
+like functions defined with $fun$:
+.PQ
+.S
+.EQ
+fn ~ false = true ~ | ~ _ = false
+.EN
+.PA
+Curried functions can be created by putting multiple patterns between
+the $fn$ keyword and the $=$ operator introducing the function body.
+For instance,
+.PQ
+.S
+.EQ
+fn ~ a ~ b ~ c = a + b + c
+.EN
+.PA
+is a shorthand notation for
+.PQ
+.S
+.EQ
+fn ~ a = fn ~ b = fn ~ c = a + b + c
+.EN
+.PA
+This works even in $fun$ declarations:
+.PQ
+.S
+.EQ
+fun ~ f ~ a ~ b ~ c = a + b + c
+.EN
+.sp -1
+.sp \"XXX
+.SU "Conditional Evaluation"
+.PA
+The $"if"$ syntax is used to evaluate expressions conditionally:
+.PQ
+.S
+.EQ I
+fun ~ gcd ~ (a, b) = mark "if" ~ b = 0 ~ then
+.EN
+.br
+.EQ I
+lineup fwd 100 a
+.EN
+.br
+.EQ I
+lineup else ~ "if" ~ a = 0 ~ then
+.EN
+.br
+.EQ I
+lineup fwd 100 b
+.EN
+.br
+.EQ I
+lineup else ~ if ~ a<b ~ then
+.EN
+.br
+.EQ I
+lineup fwd 100 gcd ~(a, b ~mod~ a)
+.EN
+.br
+.EQ I
+lineup else
+.EN
+.br
+.EQ I
+lineup fwd 100 gcd ~(b, a ~mod~ b)
+.EN
+.PA
+Note, though, that it is often more intuitive to replace $"if"$
+by pattern matching wherever possible:
+.PQ
+.S
+.EQ I
+fun ~ gcd ~ (a, 0) mark = a
+.EN
+.br
+.EQ I
+| ~ (0, b) lineup = b
+.EN
+.br
+.EQ I
+| ~ (a, b) lineup = if ~ a<b ~ then
+.EN
+.br
+.EQ I
+fwd 750 ~ gcd ~(a, b ~mod~ a)
+.EN
+.br
+.EQ I
+fwd 650 ~ else
+.EN
+.br
+.EQ I
+fwd 750 ~ gcd ~(b, a ~mod~ b)
+.EN
+.PA
+The $or$ and $also$ operators implement
+.I short-circuit
+logic operations:
+.PQ
+.S
+.EQ
+true ~ or ~ "\"x\"" ~~->~~ true
+.EN
+.br
+.EQ
+false ~ or ~ "\"x\"" ~~->~~ "\"x\""
+.EN
+.br
+.EQ
+true ~ also ~ "\"x\"" ~~->~~ "\"x\""
+.EN
+.br
+.EQ
+false ~ also ~ "\"x\"" ~~->~~ false
+.EN
+.PA
+Because of the short-circuit nature of these operators, the following
+expressions are save:
+.PQ
+.S
+.EQ
+true ~ or ~ 1 ~ div ~ 0
+.EN
+.br
+.EQ
+false ~ also ~ 1 ~ div ~ 0
+.EN
+.PA
+When the operators are chained, they associate to the left and $also$
+binds stronger than $or$.
+.PQ
+.PA
+The $case$ syntax is merely a thin coating of syntactic sugar on top of
+$fn$:
+.PQ
+.S
+.EQ
+case ~ x ~ of ~ pattern = expression ~ | ~ ...
+.EN
+.PA
+is merely an alternative form of the function application
+.PQ
+.S
+.EQ
+(fn ~ pattern = expression ~ | ~ ...) ~ x
+.EN
+.PA
+It moves the argument to the beginning of the expression, which can
+increase readability in some cases.
+.PQ
+.sp -1
+.S \"XXX
+.SU "Guarded Patterns"
+.PA
+mLite extends the ML-style pattern matching mechanism by introducing
+implicit and explicit
+.I guards .
+A guard is an expression that is part of a pattern rather than a function
+body. It is evaluates after matching a pattern, but
+.I before
+evaluating the associated body. The body is only evaluated, if the
+guard evaluates to a ``true'' (i.e. non-$false$) value. Otherwise the
+match fails and the next pattern is tried.
+.PQ
+.PA
+This is a version of the $gcd$ function using a guard:
+.PQ
+.S
+.EQ I
+fun ~ gcd ~ mark (a, 0) = a
+.EN
+.br
+.EQ I
+| ~ lineup (0, b) = b
+.EN
+.br
+.EQ I
+| ~ lineup (a, b) ~ where ~ a < b
+.EN
+.br
+.EQ I
+fwd 605 = gcd ~(a, b ~mod~ a)
+.EN
+.br
+.EQ I
+| ~ lineup (a, b) = gcd ~(b, a ~mod~ b)
+.EN
+.PA
+The $where$ keyword introduces the guard $a<b$. So the first pattern
+$(a,b)$ matches only if $a<b$. The second $(a,b)$, without any guard,
+matches if the first one did not match.
+.PQ
+.PA
+When a guard deals only with a single variable, it can be placed in the
+pattern itself. This is called in
+.I implicit
+guard. Implicit guards often allow to express functions in a more natural
+way. For example:
+.PQ
+.S
+.EQ I
+sgn ~ mark x < 0 = "" tilde 1
+.EN
+.br
+.EQ I
+| ~ lineup x > 0 = 1
+.EN
+.br
+.EQ I
+| ~ lineup _ = 0
+.EN
+.PA
+instead of
+.PQ
+.S
+.EQ I
+sgn ~ mark x ~ where ~ x < 0 = "" tilde 1
+.EN
+.br
+.EQ I
+| ~ lineup x ~ where ~ x > 0 = 1
+.EN
+.br
+.EQ I
+| ~ lineup _ = 0
+.EN
+.PA
+Note: because $=$ is also used to introduce function bodies, the guard
+expression has to be parenthesized when using this operator, as in
+.PQ
+.S
+.EQ
+fn ~ (x ~ mod ~ 2 = 0) = "..."
+.EN
+.PA
+or
+.PQ
+.S
+.EQ
+fn ~ (a, b) ~ where ~ (a=b) = "..."
+.EN
+.PA
+Even function application has to appear in parentheses in guard
+expressions to distinguish it from currying. For instance:
+.PQ
+.S
+.EQ L
+~~~~~ fn ~ f ~ x = "..." ~~~ mark roman equals ~~~ fn ~ f = fn ~ x = "..."
+.EN
+.PA
+but
+.PQ
+.S
+.EQ L
+fn ~ (f ~ x) = "..." ~~~ lineup roman equals ~~~ fn ~ x
+~ where ~ (f ~ x) = "..."
+.EN
+.PA
+Parentheses can be omitted when an equal operator or function application
+appears inside of a list or tuple.
+.PQ
+.PA
+Multiple implicit guards can be used in the same tuple or list:
+.PQ
+.S
+.EQ
+fn ~ [x < 0, y > 0] = "..."
+.EN
+.PA
+would be equal to
+.PQ
+.S
+.EQ
+fn ~ [x, y] ~ where ~ (x < 0 ~ also ~ y > 0) = "..."
+.EN
+.S \"XXX
+.PA
+Each guard evaluates inside of the lexical environment of the function
+containing it, so functions can close over identifiers used in guards.
+The following $filter$ function is a curried version of the
+$extract$ function in the initial example (pg \n(R8):
+.PQ
+.PA
+This function works, because $f2$ closes over $f$, and $f~x$
+is evaluated inside of the environment of $f2$.
+.PQ
+.S
+.bp \"XXX
+.EQ
+fun ~ filter ~ f =
+.EN
+.br
+.EQ
+~~~ let ~ fun ~ f2 ~ mark ([], r) = rev ~ r
+.EN
+.br
+.EQ
+| ~ lineup (f ~ x ~ :: ~ xs, r) = f2 ~ (xs, x ~ :: ~ r)
+.EN
+.br
+.EQ
+| ~ lineup (x ~ :: ~ xs, r) = f2 ~ (xs, r)
+.EN
+.br
+.EQ
+~~~ in ~ fn ~ a = f2 ~ (a, [])
+.EN
+.br
+.EQ
+~~~ end
+.EN
+.sp -1
+.SU "Exception Handling"
+.X R5
+.PA
+The declaration
+.PQ
+.S
+.EQ
+exception ~ ":foo"
+.EN
+.PA
+creates a new exception named $":foo"$.
+.PQ
+.PA
+Exceptions are technically constructors, so their names must begin
+with a colon, just like $::$.
+.PQ
+.PA
+The $raise$ keyword
+.I raises
+an exception, i.e. it notifies the program that something interesting
+happened. When there is no
+.I handler
+for the given exception, the program reacts to the notification by
+terminating and printing a message. So the expression
+.PQ
+.S
+.EQ
+raise ~ ":foo"
+.EN
+.PA
+will just terminate program execution.
+.PQ
+.PA
+Exceptions are frequently used to indicate
+.I unusual
+conditions during program execution. For instance, we might expect a
+list of single-digit numbers in the $"sum"$ function. We catch the case
+of a non-digit by raising the $":not_a_digit"$ exception.
+.PQ
+.S
+.EQ
+exception ~ ":not_a_digit"
+.EN
+.S
+.EQ
+fun ~ "sum" ~ mark [] = 0
+.EN
+.br
+.EQ
+| ~ lineup ((x > 9 ~ or ~ x < 0) ~::~ _) = raise ~ ":not_a_digit"
+.EN
+.br
+.EQ
+| ~ lineup (x ~::~ t) = x + "sum" ~ t
+.EN
+.PA
+An
+.I "exception handler"
+is installed with the $handle$ operator. An exception handler is an
+ordinary function with exception names as patterns. It will handle all
+exceptions listed as patterns, so the handler in
+.PQ
+.S
+.EQ
+(raise ~ ":foo") ~ handle ~ ":foo" = "\"caught!\""
+.EN
+.PA
+will return the value
+.VA """caught!""" .
+.PQ
+.PA
+An exception handler offers a way to provide a non-local exit and
+a default value for a failed computation at the same time. It can
+be thought of as a ``jump'' from the $raise$ to the handler. For
+instance, we can exit from $"sum"$
+.I without
+performing all pending $+$ operations caused by recursion:
+.S
+.EQ
+"sum" ~ [1,2,3,99,4,5] ~ handle ~ ":not_a_digit" = false
+.EN
+.PQ
+.PA
+Exception handling can also be used to implement
+.I backtracking .
+Exploring why the following program generates the correct solution
+.PQ
+.S
+.EQ
+change (16, [5, 2]) ~~->~~ [5, 5, 2, 2, 2]
+.EN
+.PA
+is left as an exercise to the reader.
+.PQ
+.S
+.EQ
+exception ~ ":out_of_coins"
+.EN
+.S
+.EQ
+fun ~ change ~ mark (0, _) = []
+.EN
+.br
+.EQ
+| ~ lineup (_, []) = raise ~ ":out_of_coins"
+.EN
+.br
+.EQ
+| ~ lineup (amount, coin ~::~ coins) =
+.EN
+.br
+.EQ
+lineup fwd 100 "if" ~ coin > amount ~ then
+.EN
+.br
+.EQ
+lineup fwd 200 change ~ (amount, coins)
+.EN
+.br
+.EQ
+lineup fwd 100 else
+.EN
+.br
+.EQ
+lineup fwd 200 coin ~::~ change ~ (amount - coin, coin ~::~ coins)
+.EN
+.br
+.EQ
+lineup fwd 200 handle ~ ":out_of_coins" = change ~ (amount, coins)
+.EN
+.sp -1
+.SU "Input and Output"
+.PA
+There are the usual functions for reading single characters ($readc$),
+reading and writing lines of text ($readln, println$), as well as
+for single-character look-ahead ($peekc$).
+.PQ
+.PA
+The $print$ and $println$ functions (which differ only in the point that
+$println$ emits a final newline sequence) can be used to write any type of
+data object. The printer will use a human-readable representation for the
+object. These functions are similar to Scheme's ``display'' procedure.
+.PQ
+.PA
+New
+.I "I/O streams"
+are created by the $instream$ and $outstream$ functions and closed by
+$close$. The garbage collector will automatically close unused streams.
+.PQ
+.PA
+The $<<$ (``receive output'') and $>>$ (``send input'')
+operators are used to redirect the input/output of the I/O functions
+to user-created streams.
+.PQ
+.PA
+The following program writes ``Hello, World!'' to the file ``hello.txt'':
+.PQ
+.S
+.EQ
+outstream ~ "\"hello.txt\"" ~ << ~ println ~ "\"Hello, World!\""
+.EN
+.PA
+The $<<$ operator makes the stream on its left-hand side receive the output
+of the expression to its right. The $>>$ operator passes input from the
+source to its left to the expression on its right.
+.PQ
+.PA
+The following expression re-reads the text written above:
+.PQ
+.S
+.EQ
+instream ~ "\"hello.txt\"" ~ >> ~ readln ~ ()
+.EN
+.PA
+The sequence ($;$) operator orders the effects of I/O expressions (any
+expressions, in fact). It first evaluates the expression to its left and
+then the expression to its right. It associates to the left, so chains of
+$;$ operators are equal to Scheme's ``begin''.
+.PQ
+.PA
+The following sequence opens a file, writes to it, and closes it:
+.PQ
+.S
+.EQ
+val ~ f = outstream ~ "\"pi\""; ~ f ~ << ~println ~ ` ~ 355/113; ~ close ~ f
+.EN
+.sp -1
+.SH "Declaration Syntax and Semantics"
+.EE "$val ~ pattern = expression$"
+.PA
+The $val$ declaration matches
+.I one
+pattern against
+.I one
+expression and binds the variables in the pattern to the corresponding
+components of the expression. Here are some examples ($;;$ introduces a
+comment to the end of line):
+.PQ
+.S
+.EQ
+val ~ x = 1                     \h'|2i' ;; ~ bind ~ x ~ "to" ~ 1
+.EN
+.br
+.EQ
+val ~ (x, y) = (1, 2)           \h'|2i' ;; ~ bind ~ x ~ "to" ~ 1 ~
+"and" ~ y ~ "to" ~ 2
+.EN
+.br
+.EQ
+val ~ (1, [x], 3) = (1, [2], 3) \h'|2i' ;; ~ bind ~ x ~ "to" ~ 2
+.EN
+.PA
+When the pattern does not match the expression, an error is reported.
+.PQ
+.EE "$val ~ p sub 1 = x sub 1 ~[~ "and" ~ p sub 2 = x sub 2 ... ~]$"
+.PA
+Multiple bindings can be established in parallel by chaining them together
+with $"and"$ (the brackets indicate an optional part here).
+.PQ
+.PA
+Parallel bindings will be established by first computing
+.I all
+expressions and then binding the variables. So the following declaration
+would in fact swap the values of $x$ and $y$:
+.PQ
+.EE "$val ~ x = y ~ "and" ~ y = x$"
+.PA
+BTW, variables inside of a single pattern are also bound in parallel, so
+this version would also swap the values of $x$ and $y$:
+.PQ
+.EE "$val ~ (x, y) = (y, x)$"
+.PA
+For sequential bindings, the sequence operator $;$ is used:
+.PQ
+.EE "$val ~ x = 1; val ~ y = x+1; val ~ z = y+1$"
+.PA
+.I "Function declarations"
+have been used throughout this text without
+ever explaining them in detail.
+.PQ
+.S
+.EQ
+fun ~ id sub 1 ~ p sub 1 ~ [where ~ x sub g ] = x sub 1 ~ | ~ ... 
+~ [ "and" ~ fun ~ id sub 2 ... ~ ]
+.EN
+.br
+.EQ
+fun ~ id sub 1 ~ p sub 1 ... [where ~ x sub g ] = x
+~ [ "and" ~ fun ~ id sub 2 ... ~ ]
+.EN
+.PA
+The declaration $fun ~ id ~ p = x$ for any pattern $p$ and expression $x$ is
+.I almost
+the same as the declaration $val ~ id = fn ~ p = x$,
+i.e. it binds an identifier to a function.
+.PQ
+.PA
+The only difference is that
+.I local
+functions defined with $fun$ may be recursive, while
+.I local
+functions defined with $val$ may not. At the top level of a program,
+there is no difference between these declarations.
+.PQ
+.PA
+Functions declared by $fun$ can be curried by using shorthand notations like
+.PQ
+.ti 0.5i
+.EE "$fun ~ add ~ a ~ b = a + b$"
+.PA
+instead of
+.PQ
+.ti 0.5i
+.EE "$fun ~ add ~ a = fn ~ b = a + b$"
+.PA
+Note, however, that currying cannot be combined with alternative patterns,
+so the typical ML-style, where multiple cases are used with curried patterns,
+cannot be replicated in mLite.
+.PQ
+.PA
+Like most other declarations, multiple instances of $fun$ may be
+chained together with $"and"$. However, the combination of $"and"$
+$fun$ is only useful when defining
+.I "local mutually recursive"
+functions. See $let$, below, for an example.
+.PQ
+.PA
+Each pattern of a function may have an associated guard $x sub g$ (or
+an implicit guard). In this case, the pattern matches only, if the
+guard expression delivers a ``true'' value.
+.PQ
+.S
+.EQ
+local ~ ldecl sub 1 ~ [ ~ ; ~ ldecl sub 2 ... ~ ] ~ in ~ decl sub 1
+~ [ ~ ; ~ decl sub 2 ... ~ ] ~ end
+.EN
+.PA
+The $local$ construct evaluates the declarations $ldecl sub 1 ...$
+and with the bindings established by these declarations in effect, it
+evaluates $decl sub 1 ...$. After evaluating the $decl$'s, the $ldecl$
+bindings are removed, but the $decl$'s stay in effect.
+.PQ
+.PA
+$local$ is used to hide local declarations from the top level. For instance,
+the $revlist$ function, which reverses a list, could be implemented as follows:
+.PQ
+.S
+.EQ
+local
+.EN
+.br
+.EQ
+~~~ fun ~ rev' ~ mark ([], b) = b
+.EN
+.br
+.EQ
+| ~ lineup (h ~::~ t, b) = rev' ~ (t, h ~::~ b)
+.EN
+.br
+.EQ
+in
+.EN
+.br
+.EQ
+~~~ fun ~ revlist ~ a = rev' ~ (a, \fR[]\fP)
+.EN
+.br
+.EQ
+end
+.EN
+.PA
+Here the $rev'$ function, which uses the accumulator $b$
+to reverse the list $a$ in linear time, is hidden from the outer context.
+.PQ
+.PA
+Only $fun$ and $val$ bindings may be used in local declarations.
+.PQ
+.S
+.EQ
+let ~ ldecl sub 1 ~ [ ~ ; ~ ldecl sub 2 ... ~ ] ~ in ~ expr sub 1 ~ [ ~ ;
+~ expr sub 2 ... ~ ] ~ end
+.EN
+.PA
+$let$ is like $local$, but instead of declaring bindings in its body
+(the part between $in$ and $end$), it evaluates expressions. Also,
+$let$ is a valid factor in expressions, which $local$ is not. For
+instance,
+.PQ
+.S
+.EQ
+val ~ x = mark let ~ fun ~ e ~ 0 = 1
+.EN
+.br
+.EQ
+lineup fwd 341 | ~ x = o ~ (x - 1)
+.EN
+.br
+.EQ
+lineup fwd 135 "and" ~ o ~ 0 = 0
+.EN
+.br
+.EQ
+lineup fwd 341 | ~ x = e ~ (x - 1)
+.EN
+.br
+.EQ
+lineup in
+.EN
+.br
+.EQ
+lineup fwd 135  map ~ e ~ [1,2,3,4,5]
+.EN
+.br
+.EQ
+lineup end
+.EN
+.TL "" \"XXX
+.PA
+would bind $x$ $[ 0,1,0,1,0 ]$. $e$ maps even numbers to 1 and odd
+numbers to 0. $e$ and $o$ are local
+.I and
+mutually recursive, which is why they
+must be declared with $fun$ ... $"and"$ ...
+.PQ
+.sp -1
+.SU "Operator Declarations"
+.PA
+.I Operators
+are in fact functions in mLite, which can easily be demonstrated as follows:
+.PQ
+.EE "$+ ~ ( ~ *(1,2), * ~ (3,4) ~ ) ~~->~~ 24$"
+.PA
+(Make sure to leave a blank between ``$($'' and ``$*$'', because ``$(*$''
+would begin a block comment.)
+.PQ
+.PA
+However, not all functions are operators:
+.PQ
+.S
+.EQ
+max(5, 7) mark ~~->~~ 7
+.EN
+.br
+.EQ
+5 ~"max"~ 7 lineup ~~->~~ error
+.EN
+.PA
+The $infix$ and $infixr$ keywords are used to declare functions as infix
+operators. The $nonfix$ keyword removes an operator declaration. Note that
+these declarations actually change the syntax of the mLite language, so
+they should be used with care.
+.PQ
+.PA
+The mLite system maintains an internal parse table that contains the
+precedence and associativity values of all operators. This table controls
+the part of the mLite parser that analyzes infix expressions. Operator
+declarations modify this table. The initial table can be found in the
+mLite Reference (pg \n(R2).
+.PQ
+.S
+.EQ
+infix ~ id sub 1 ~ left { <,=,> right } ~ id sub 2
+.EN
+.br
+.EQ
+infixr ~ id sub 1 ~ left { <,=,> right } ~ id sub 2
+.EN
+.PA
+An $infix$ declaration adds the identifier $id sub 1$
+to the parse table. The precedence will be either less than, equal to,
+or greater than the precedence of $id sub 2$,
+depending on the operator used in between. E.g.
+.PQ
+.ti +0.5i
+.EE "$infix ~ "max" = +$"
+.PA
+would assign the precedence of the $+$ operator to $"max"$.
+The new operator associates to the left. After the above declaration,
+the expression
+.PQ
+.ti +0.5i
+.EE "$a + b ~ "max" ~ c + d$"
+.PA
+would parse as
+.PQ
+.ti +0.5i
+.EE "$((a + b) ~ "max" ~ c) + d$"
+.PA
+An $infixr$ declaration works in exactly the same way, but makes $id sub 1$
+associate to the right.
+.PQ
+.EE "$nonfix ~ id ~ [~ , ... ~ ]$"
+.PA
+A $nonfix$ declaration removes the given identifiers from the parse table.
+After removing an identifier from the table, it no longer works as an infix
+operator.
+.PQ
+.PA
+While $nonfix$ can theoretically be applied to predefined operators, such
+as $+$ and $@$, doing so is not recommended.
+.PQ
+.EE "$op ~ f$"
+.PA
+Any infix operator can be used as a function by prefixing it with the
+keyword $op$. For instance:
+.PQ
+.EE "$op ~ + ~ (5, 7)$"
+.PA
+or
+.PQ
+.EE "$fold ~ (op ~ +, 0) ~ [1, 2, 3, 4, 5]$"
+.PA
+Note that the $op$ keyword is merely a hint for the parser and can often
+be omitted.
+.PQ
+.sp -1
+.SU "Algebraic Types"
+.X R6
+.S
+.EQ
+"type" ~ ":id" = constructor ~ | ~ ...
+.EN
+.PA
+The $"type"$ declaration creates a new data type called $":id"$,
+which may be constructed
+.I "and deconstructed"
+by any of the constructors following the equal sign.
+.PQ
+.PA
+The following declaration defines a ``list'' type, although this is
+actually redundant, because mLite already has a primitive list type:
+.PQ
+.S
+.EQ
+"type" ~ ":list" = ":nil" ~ | ~ ":cons" ~ (x, ":list")
+.EN
+.PA
+It means, ``a $":list"$ is either $":nil"$ or a $":cons"$ of some object
+and another $":list"$''. This is the archetypal definition of the list,
+as it can be found in pretty much every introduction-level computer
+science textbook.
+.PQ
+.PA
+A new $":list"$ can then be created by $":cons"$:
+.PQ
+.S
+.EQ
+":cons" ~ (1, ~ ":cons" ~ (2, ~ ":cons" ~ (3, ~ ":nil")))
+.EN
+.PA
+and functions may use the $":cons"$ constructor in patterns in order to
+.I destructure $":list"$s:
+.PQ
+.S
+.EQ
+fun ~ length ~ mark ":nil" = 0
+.EN
+.br
+.EQ
+| ~ lineup ":cons" ~ (_, t) = 1 + length ~ t
+.EN
+.PA
+Of course, $"type"$ constructors can be infix operators, so after declaring
+.PQ
+.S
+.EQ
+infixr ~ ":cons" = ::
+.EN
+.PA
+the following expression can be used to create a list:
+.PQ
+.S
+.EQ
+1 ~ ":cons" ~ 2 ~ ":cons" ~ 3 ~ ":cons" ~ ":nil"
+.EN
+.PA
+and $length$ can be written like this:
+.PQ
+.S
+.EQ
+fun ~ length ~ mark ":nil" = 0
+.EN
+.br
+.EQ
+| ~ lineup (_ ~ ":cons" ~ t) = 1 + length~t
+.EN
+.PA
+The following $"type"$ defines a binary tree:
+.PQ
+.S
+.EQ
+"type" ~ ":tree" = ":leaf" ~ (x) ~ | ~ ":node" ~ (":tree", ~ ":tree")
+.EN
+.PA
+So a $":tree"$ is either a $":leaf"$ of a value $x$ or a $":node"$
+of two $":tree"$'s. Here is a sample tree:
+.PQ
+.FB
+:node
+  (:node
+     (:leaf 1,
+      :leaf 2),
+   :node
+     (:node
+        (:leaf 3,
+         :leaf 4),
+      :node
+        (:leaf 5,
+         :leaf 6)))
+.FE
+.PA
+And this is a function computing the depth (the longest path from the
+root to a leaf) of a tree:
+.PQ
+.S
+.EQ
+fun ~ depth ~ mark ":leaf" ~ (_) = 1
+.EN
+.br
+.EQ
+| ~ lineup ":node" ~ (l, r) = 1 + "max" ~ (depth ~ l, depth ~ r)
+.EN
+.PA
+Of course, algebraic types can be combined:
+.PQ
+.S
+.EQ
+"type" ~ ":vtree" = ":leaf" ~ (x) ~ | ~ ":node" ~ (":tlist")
+.EN
+.br
+.EQ
+"type" ~ ":tlist" = ":nil" ~ | ~ ":tcons" ~ (":vtree", ":tlist")
+.EN
+.PA
+A $":vtree"$ is either a $":leaf"$ of a value or a $":node"$ of a
+$":tlist"$ (tree list), and a $":tlist"$ is either $":nil"$ or a
+$":tcons"$ of a $":vtree"$ and a $":tlist"$.
+The types are mutually recursive and together define a variadic tree.
+.PQ
+.S
+.EQ
+exception ~ ":id" ~ [ ~ "and" ... ~]
+.EN
+.PA
+An $exception$ declaration is technically equal to a $"type"$
+declaration of the form
+.PQ
+.S
+.ti +0.5i
+.EQ
+"type" ~ ":id" = ":id"
+.EN
+.PA
+It defines a
+.I "constant constructor" ,
+i.e. a constructor that evaluates to itself. However, the $exception$
+declaration should be used for clarity.
+.PQ
+.bp
+.HD "The Lite Abstract Machine"
+.PA
+mLite compiles internally to a Scheme-based domain-specific language (DSL)
+that is easily implemented on top of a Scheme system by means of functions
+and macros, allowing an mLite environment to make use of a mature Scheme
+system as its back-end.
+.PQ
+.PA
+The Lite Abstract Machine (LAM) language differs from ordinary Scheme in
+the following aspects.
+.PQ
+.sp 0.4v
+.LB
+.LI "Lambda abstraction is replaced by a pattern matching function
+abstraction.
+.LI "There are additional special forms to support algebraic types and
+exceptions.
+.LI "There is a new ``tuple'' data type.
+.LI "All non-variadic primitive functions are unary, using tuples and
+pattern matching to receive multiple arguments.
+.LI "Some special forms and most of the built-in procedures have been
+removed or renamed in order to make LAM more similar to the mLite language.
+.LI "File input/output works in a different way."
+.LE
+.sp -1
+.SH "LAM Syntax"
+.PA
+Most LAM data objects look exactly like Scheme data objects, with the
+following exceptions:
+.PQ
+.LB
+.LI "Truth values are represented by the identifiers"
+$true$ and $false$.
+.LI "Char literals are represented by"
+$#\"c\"$ where $c$ may be a single character or $"space"$ or $newline$.
+.LI "Lists use square brackets instead of parentheses"
+and $::$ instead of the dot (.).
+.LI "There is no external representation for vectors. Vectors are created"
+by the $newvec$ function.
+.LE
+.PA
+There is a comprehensive list of mLite/LAM data objects in the mLite
+Reference (pg \n(R4).
+.PQ
+.PA
+In the following summary, $x$ denotes
+.I any
+type. In syntactical forms (``special forms''), $x$ denotes an
+unevaluated expression and $eval(x)$ denotes its normal form, i.e.
+its value after evaluation.
+.PQ
+.PA
+A summary of all other type designators can also be found in the mLite
+Reference.
+.PQ
+.sp -1
+.SU "Scheme-Like Syntax"
+.EE "$(quote ~ x) ~~->~~ x$"
+.PA
+Return the value $x$.
+.PQ
+.EE "$(begin ~ x sub 1 ... x sub n ) ~~->~~ eval(x sub n )$"
+.PA
+Evaluate each $x sub i$ in sequence, return the value of $x sub n$.
+.PQ
+.S
+.EQ
+("if" ~ x sub 1 ~ x sub 2 ~ x sub 3 ) ~~->~~ eval( x sub 2 ~|~ x sub 3 )
+.EN
+.PA
+If $eval(x sub 1 )$ is not $false$, evaluate to $eval(x sub 2 )$, else evaluate
+to $eval(x sub 3 )$. There is no two-argument variant of $"if"$.
+.PQ
+.EE "$(or ~ x sub 1 ... ) ~~->~~ eval(x sub i )$
+.PA
+Return the value of the first $x sub i$ that does not evaluate to $false$,
+else return $false$.
+.PQ
+.EE "$(also ~ x sub 1 ... x sub n ) ~~->~~ eval(x sub i )$"
+.PA
+Evaluate to the value of the first $x sub i$ that evaluates to $false$.
+Evaluate to $x sub n$, if all prior $x sub i$'s evaluated to a
+non-$false$ value. This is like Scheme's ``and''. It is called
+$also$, because $"and"$ is reserved for chaining declarations.
+.PQ
+.EE "$("set!" ~ id ~ x) ~~->~~ ()$"
+.PA
+Change the value bound to $id$ to $eval(x)$. Used to implement
+recursive bindings.
+.PQ
+.PA
+(Note: the name $"set!"$ does not have to be a valid mLite identifier,
+because it is only used internally.)
+.PQ
+.sp -1
+.TL "" \"XXX
+.bp \"XXX
+.SU "Non-Scheme Syntax"
+.EE "$(fn ~ (p sub 1 ~ x sub 1 ) ... ) ~~->~~ f$"
+.PA
+Create a new function of patterns $p sub 1 ... $ to expressions
+$x sub 1 ... $. See function application, below, for further details.
+.PQ
+.EE "$((fn ~ (p sub 1 ~ x sub 1 ) ... ) ~ x sub a ) ~~->~~ eval(x sub 1 )$"
+.PA
+Attempt to match the argument expression $x sub a$ against the pattern
+$p sub 1$, thereby binding variables in the pattern to matching values
+in the argument. When the match succeeds, evaluate $x sub 1$ with the
+bindings in effect and return $eval(x sub 1 )$.
+.PQ
+.PA
+When $x sub a$ does not match $p sub 1$, try the other patterns $p sub i$,
+until a pattern matches or no more patterns can be found. A function
+application running out of patterns is an error.
+.PQ
+.PA
+The exact pattern matching algorithm is be explained in the section
+on the mLite language itself and, more formally, in the mLite Reference
+(pg \n(R1).
+.PQ
+.S
+.EQ
+(letrec ~ ((id sub 1 ~ (p sub 1 ~ x sub 1 ) ... ) ... )
+~ x sub b1 ... x sub bn ) ~~->~~ eval(x sub bn )
+.EN
+.PA
+Bind each identifier $id sub i$ to the corresponding function
+$(fn ~ (p sub i ~ x sub i ) ... )$. With those bindings in effect,
+evaluate $x sub b1 ... x sub bn$ and finally return $x sub bn$.
+.PQ
+.EE "$(%raise ~ :id) ~~->~~ undefined$"
+.PA
+Raise the exception $":id"$.
+This operator never returns. Exception handling is discussed in the section
+on the mLite language (pg \n(R5).
+.PQ
+.EE "$(define ~ id ~ x) ~~->~~ ()$"
+.PA
+Create the new variable $id$ and bind it to the value $eval(x)$.
+The new binding will be always added to the
+.I "top level environment" ,
+so the binding created by the form
+.PQ
+.ti 0.5i
+.S
+.EQ
+((fn ~ (x ~ (define ~ foo ~ x))) ~ "\"bar\"")
+.EN
+.PA
+will persist even after the function returns. In other words, $"define"$
+binds variables to values
+.I globally ,
+no matter what context it appears in.
+.PQ
+.bp \"XXX
+.EE "$(define_type ~ ":id" ~ constructor ... ) ~~->~~ ()$"
+.PA
+Create a new algebraic data type named $":id"$. Each $constructor$
+is either a name beginning with a colon (a constructor name) or a
+tuple containing a constructor name in the first slot. Atomic
+constructors create atomic objects, tuples create constructor functions.
+.PQ
+.PA
+For instance, the following data type declaration creates the typical
+Lisp list type:
+.PQ
+.ti 0.5i
+.EE "$(define_type ~ ":list" ~ ":nil" ~ (":cons" ~ x ~ ":list"))$"
+.PA
+Algebraic types are explained in detail in the introduction to the
+mLite language (pg \n(R6).
+.PQ
+.EE "$( >> ~ instream ~ x) ~~->~~ eval(x)$"
+.PA
+Evaluate $x$ with program input redirected to the given $instream$,
+where $x$ is typically an expression whose effect is to read input from
+a stream. Return $eval(x)$.
+.PQ
+.EE "$( << ~ outstream ~ x) ~~->~~ eval(x)$"
+.PA
+Evaluate $x$ with program output redirected to the given $outstream$
+where $x$ is typically an expression whose effect is to write output to
+a stream. Return $eval(x)$.
+.PQ
+.sp -1
+.SU "Scheme-Like Functions"
+.PA
+The following functions are almost identical to their Scheme counterparts:
+.PQ
+.S
+.ti 0.5i
+.EQ
+* ~~ + ~~ - ~~ / ~~ < ~~ "<=" ~~ = ~~ > ~~ ">=" ~~ abs ~~ call/cc
+~~ "max" ~~ "min" ~~ not
+.EN
+.PA
+They implement multiplication, addition, subtraction, the usual comparison
+operations, magnitude ($abs$), call-with-current-continuation,
+the minimum and maximum of two numbers, and the logical ``not''.
+.PQ
+.PA
+Unlike their Scheme counterparts, all of these functions are
+.I unary ,
+though, and multiple values are passed to them via tuples so, for instance,
+two numbers $x$ and $y$ are added by the form
+.PQ
+.ti 0.5i
+.EE "$(+ ~ (tuple ~ x ~ y))$"
+.PA
+Also, none of these functions are variadic. The arithmetic and comparison
+functions (except for $abs$) all expect 2-tuples as arguments. $call/cc$
+expects a single value. The $not$ function is type-agnostic, as in Scheme.
+.PQ
+.PA
+The domain of the comparison operators has been extended, so they can
+be applied to $chars$ and $strings$ in addition to numbers.
+.PQ
+.sp -1
+.sp \"XXX
+.SU "Renamed Functions"
+.PA
+Some functions have been renamed to make them fit better in the mLite
+language. A full map of these functions can be found in the appendix
+(pg \n(RB).
+.PQ
+.sp -1
+.sp \"XXX
+.SU "mLite Functions"
+.PA
+The following identifiers denote LAM-level mLite functions:
+.PQ
+.S
+.in +0.5i
+.EQ
+:: ~~ @ ~~ <> ~~ "~<" ~~ "~<=" ~~ "~<>" ~~ "~=" ~~ "~>" ~~ "~>=" ~~ close
+.EN
+.br
+.EQ
+len ~~ println ~~ readln ~~ ref ~~ rev ~~ "set" ~~ setvec ~~ "sub" ~~ "~"
+.EN
+.in -0.5i
+.PA
+Some of these functions are explained in detail in the introduction
+to the mLite language. A full list can be found in the mLite Reference.
+.PQ
+.PA
+The following identifiers denote functions that are used internally in
+code compiled from mLite programs:
+.PQ
+.EE "$(list ~ x sub 1 ... ) ~~->~~ L$"
+.PA
+Create a list.
+.PQ
+.EE "$(tuple ~ x sub 1 ... x sub k ) ~~->~~ T sub k$"
+.PA
+Create a k-tuple.
+.PQ
+.EE "$(%register ~ k ~ f) ~~->~~ ()$"
+.PA
+Register exception handler $f$ with exit point $k$ ($k$ is a continuation).
+.PQ
+.EE "$(%unregister ~ x) ~~->~~ x$"
+.PA
+Unregister the most recently registered exception handler and return $x$.
+This is an identity function with the effect of unregistering a handler.
+.PQ
+.EE "$(%typecheck ~ ":id" ~ x ~ L) ~~->~~ x$"
+.PA
+Check whether $x$ is contained in $L$, where $L$ is a list of all patterns
+representing the type $":id"$. For instance, given the definition
+.PQ
+.ti +0.5i
+.EE "$(define_type ~ ":list" ~ ":nil" ~ (":cons" ~ x ~ ":list"))$"
+.PA
+the $":cons"$ constructor would use $%typecheck$ to make sure its
+second argument is of the form $":nil"$ or $(":cons" ~ x ~ y)$.
+.PQ
+.TL ""
+.bp
+.HD "Compiling mLite to LAM"
+.PA
+This chapter defines the semantics of the mLite language in terms of the
+Lite Abstract Machine.
+.PQ
+.sp -1
+.SH "Data Objects"
+.PA
+Atomic data objects and identifiers compile to themselves; $a -> b$ means
+``$a$ compiles to $b$'' in this chapter.
+.PQ
+.S
+.EQ
+~~~~~~ [] mark ~~->~~ []
+.EN
+.br
+.EQ
+() lineup ~~->~~ ()
+.EN
+.br
+.EQ
+bool lineup ~~->~~ bool
+.EN
+.br
+.EQ
+"int" lineup ~~->~~ "int"
+.EN
+.br
+.EQ
+real lineup ~~->~~ real
+.EN
+.br
+.EQ
+char lineup ~~->~~ char
+.EN
+.br
+.EQ
+str lineup ~~->~~ str
+.EN
+.br
+.EQ
+id lineup ~~->~~ id
+.EN
+.br
+.EQ
+op ~ id lineup ~~->~~ id
+.EN
+.PA
+Lists and tuples:
+.PQ
+.EE "$[x sub 1 , ... ] ~~->~~ (list ~ x sub 1 ... )$"
+.EE "$(x sub 1 , x sub 2 , ... ) ~~->~~ (tuple ~ x sub 1 ~ x sub 2 ... )$"
+.S
+.EQ
+#"int"( x sub 1 , x sub 2 , ... )
+~~->~~ (ref ~ (tuple ~ x sub 1 ~ x sub 2 ...) ~ "int")
+.EN
+.PA
+Algebraic types:
+.PQ
+.S
+.EQ
+":type" ~~->~~ ":type"
+.EN
+.S
+.EQ
+":type" ~ ( x sub 1 , ... ) ~~->~~ (:type ~ x sub 1 ... )
+.EN
+.sp -1
+.SH "Functions and Application"
+.EE "$fn ~ p = x ~|~  ... ~~->~~ (fn ~ (p ~ x) ... )$"
+.S
+.EQ
+fn ~ p sub 1 ~ p sub 2 = x ~~->~~ (fn ~ (p sub 1 ~ (fn ~ (p sub 2 ~ x))))
+.EN
+.S
+.EQ
+(fn ~ p = x ~|~ ... ) ~ x sub a ~~->~~ ((fn ~ (p ~ x) ... ) ~ x sub a )
+.EN
+.EE "$f ~ x ~~->~~ (f ~ x)$"
+.EE "$f ~ g ~ x ~~->~~ ((f ~ g) ~ x)$"
+.EE "$f ~ (g ~ x) ~~->~~ (f ~ (g ~ x))$"
+.EE "$f ~ ` ~ g ~ x ~~->~~ (f ~ (g ~ x))$"
+.PA
+$R$ denotes an infix operator and $R sub n$ an infix operator of
+precedence $n$, where higher values indicate stronger binding.
+$R sub L$ and $R sub R$ indicate left- and right associative operators,
+respectively (with equal precedence). Then:
+.PQ
+.S
+.EQ
+x sub 1 ~R~ x sub 2 ~=~ R ~( x sub 1 , x sub 2 ), ~~ roman so ~~
+x sub 1 ~R~ x sub 2 ~~->~~ (R ~ (tuple ~ x sub 1 ~ x sub 2 ))
+.EN
+.PA
+Furthermore:
+.PQ
+.S
+.EQ
+x ~ R sub L ~ y ~ R sub L ~ z
+~~->~~ (R sub L ~ (tuple ~ (R sub L ~ (tuple ~ x ~ y)) ~ z))
+.EN
+.S
+.EQ
+x ~ R sub R ~ y ~ R sub R ~ z
+~~->~~ (R sub R ~ (tuple ~ x ~ (R sub R ~ (tuple ~ y ~ z))))
+.EN
+.S
+.EQ
+x ~ R sub 2 ~ y ~ R sub 1 ~ z
+~~->~~ (R sub 1 ~ (tuple ~ (R sub 2 ~ (tuple ~ x ~ y)) ~ z))
+.EN
+.S
+.EQ
+x ~ R sub 1 ~ y ~ R sub 2 ~ z
+~~->~~ (R sub 1 ~ (tuple ~ x ~ (R sub 2 ~ (tuple ~ y ~ z))))
+.EN
+.EE "$(x) ~~->~~ x$"
+.S
+.EQ
+(x ~ R sub 1 ~ y) ~ R sub 2 ~ z
+~~->~~ (R sub 2 ~ (tuple ~ (R sub 1 ~ (tuple ~ x ~ y)) ~ z))
+.EN
+.S
+.EQ
+x ~ R sub 2 ~ (y ~ R sub 1 ~ z)
+~~->~~ (R sub 2 ~ (tuple ~ x ~ (R sub 1 ~ (tuple ~ y ~ z))))
+.EN
+.sp -1
+.S \"XXX
+.SH "Expressions"
+.PA
+Sequences:
+.PQ
+.EE "$x sub 1 ~ or ~ x sub 2 ~ or ... ~~->~~ (or ~ x sub 1 ~ x sub 2 ... )$"
+.S
+.EQ
+x sub 1 ~ also ~ x sub 2 ~ also ... ~~->~~ (also ~ x sub 1 ~ x sub 2 ... )
+.EN
+.EE "$x sub 1 ~ ; ~ x sub 2 ~ ; ... ~~->~~ (begin ~ x sub 1 ~ x sub 2 ... )$"
+.PA
+Conditional evaluation:
+.PQ
+.S
+.EQ
+"if" ~ x sub 1 ~ then ~ x sub 2 ~ else ~ x sub 3 ~~->~~
+("if" ~ x sub 1 ~ x sub 2 ~ x sub 3 )
+.EN
+.S
+.EQ
+case ~ x sub 0 ~ of ~ p sub 1 = x sub 1 ~|~ ... ~~->~~
+((fn ~ (p sub 1 ~ x sub 1 ) ... ) ~ x sub 0 )
+.EN
+.PA
+I/O redirection:
+.PQ
+.EE "$x sub 1 ~ << x sub 2 ~~->~~ ( << ~ x sub 1 ~ x sub 2 )$"
+.EE "$x sub 1 ~ >> x sub 2 ~~->~~ ( >> ~ x sub 1 ~ x sub 2 )$"
+.PA
+Exceptions
+.PQ
+.S
+.EQ
+x sub 0 ~ handle ~ ":exn" sub 1 = x sub 1 ~|~ ...
+.EN
+.br
+.EQ
+~~~~->~~ (call/cc ~ (fn ~ (k ~ mark (%register ~ k ~
+                                    (fn ~ (":exn" sub 1 ~ x sub 1 ) ... ))
+.EN
+.br
+.EQ
+lineup (%unregister ~ x sub 0 ))))
+.EN
+.S
+.EQ
+raise ~ ":exn" ~~->~~ (%raise ~ ":exn")
+.EN
+.PA
+Local values:
+.PQ
+.S
+.EQ
+let ~ val ~ p sub 1 = x sub 1 ~ in ~ x sub 2 ~ end ~~->~~
+((fn ~ (p sub 1 ~ x sub 2 )) ~ x sub 1 )
+.EN
+.S
+.EQ
+let ~ val ~ p sub 1 = x sub 1 ~ "and" ~ p sub 2 = x sub 2 ~ in ~ x sub 3 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ ((p sub 1 ~ p sub 2 ) ~ x sub 3 )) ~ x sub 1 ~ x sub 2 )
+.EN
+.PA
+Note that:
+.PQ
+.EQ
+fwd 83 ((fn ~ ((p sub 1 ~ p sub 2 ... ) ~ x sub b )) ~ x sub 1 ~ x sub 2 ...)
+.EN
+.br
+.EQ
+= ((fn ~ ((p sub 1 ~ p sub 2 ... ) ~ x sub b ))
+~ (tuple ~ x sub 1 ~ x sub 2 ...))
+.EN
+.S
+.EQ
+let ~ val ~ p sub 1 = x sub 1 ; ~ val ~ p sub 2 = x sub 2 ~ in ~ x sub 3 ~ end
+.EN
+.br
+.EQ
+~~~~->~~
+((fn ~ (p sub 1 ~ ((fn ~ (p sub 2 ~ x sub 3 )) ~ x sub 2 ))) ~ x sub 1 )
+.EN
+.S
+.EQ
+let ~ val ~ p sub 1 = x sub 1 ~ in ~ x sub 2 ; ~ x sub 3 ~ end
+~~->~~ ((fn ~ (p sub 1 ~ (begin ~ x sub 2 ~ x sub 3 ))) ~ x sub 1 )
+.EN
+.PA
+Local functions:
+.PQ
+.S
+.EQ
+let ~ fun ~ f sub 1 ~ p sub 1 = x sub 1 ~ in ~ x sub 2 ~ end
+~~->~~ (letrec ~ ((f sub 1 ~ (p sub 1 ~ x sub 1 ))) ~ x sub 2 )
+.EN
+.S
+.EQ
+let ~ fun ~ f sub 1 ~ p sub 1 = x sub 1 ~ "and" ~ f sub 2 ~ p sub 2 = x sub 2
+~ in ~ x sub 3 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((f sub 1 ~ (p sub 1 ~ x sub 1 ))
+                  ~ (f sub 2 ~ (p sub 2 ~ x sub 2 ))) ~ x sub 3 )
+.EN
+.S
+.EQ
+let ~ fun ~ f sub 1 ~ p sub 1 = x sub 1 ; ~
+      fun ~ f sub 2 ~ p sub 2 = x sub 2 ~ in ~ x sub 3 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((f sub 1 ~ (p sub 1 ~ x sub 1 )))
+         ~ (letrec ~ ((f sub 2 ~ (p sub 2 ~ x sub 2 ))) ~ x sub 3 ))
+.EN
+.S
+.EQ
+let ~ fun ~ f sub 1 ~ p sub 1 = x sub 1 ~ in ~ x sub 2 ; ~ x sub 3 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((f sub 1 ~ (p sub 1 ~ x sub 1 )))
+         ~ (begin ~ x sub 2 ~ x sub 3 ))
+.EN
+.sp -1
+.SH "Declarations"
+.PA
+Values:
+.PQ
+.EE "$val ~ v = x ~~->~~ (define ~ v ~ x)$"
+.S
+.EQ
+val ~ p = ~ x ~~->~~ ((fn ~ (p ~ (define ~ v sub 1 ~ v sub 1 ) ... )) ~ x)
+.EN
+.PA
+where each $v sub i$ is a variable of the pattern $p$.
+.PQ
+.PA
+For example:
+.PQ
+.S
+.EQ
+val ~ (x, y) = (1, 2)
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ ((x ~ y) ~ (define ~ x ~ x) ~ (define ~ y ~ y)))
+~ (tuple ~ 1 ~ 2))
+.EN
+.PA
+Because $"define"$ binds variables at the top level, the construct
+$("define" ~ v ~ v)$ copies the binding of the identifier $v$ to the
+top-level (global) environment.
+.PQ
+.S
+.EQ
+val ~ p sub 1 = x sub 1 ~ "and" ~ x sub 2 = p sub 2
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ ((p sub 1 ~ p sub 2 ) ~ (define ~ v sub 1 ~ v sub 2 ) ... ))
+~ x sub 1 ~ x sub 2 )
+.EN
+.PA
+Functions:
+.PQ
+.S
+.EQ
+fun ~ id ~ p sub 1 = x sub 1 ~|~ ... ~~->~~
+(define ~ id ~ (fn ~ (p sub 1 ~ x sub 1 ) ... ))
+.EN
+.S
+.EQ
+fun ~ id ~ p sub 1 ~ p sub 2 = x ~~->~~
+(define ~ id ~ (fn ~ (p sub 1 ~ (fn ~ (p sub 2 ~ x )))))
+.EN
+.S
+.EQ
+fun ~ id sub 1 ~ p sub 1 = x sub 1 ~ "and" ~ id sub 2 ~ p sub 2 = x sub 2
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((id sub 1 ~ (p sub 1 ~ x sub 1 ))
+                  ~ (id sub 2 ~ (p sub 2 ~ x sub 2 )))
+.EN
+.br
+.EQ
+fwd 360 (define ~ id sub 1 ~ id sub 1 )
+.EN
+.br
+.EQ
+fwd 360 (define ~ id sub 2 ~ id sub 2 ))
+.EN
+.PA
+Guarded functions:
+.PQ
+.S
+.EQ
+fun ~ id ~ p ~ where ~ x sub g = x
+.EN
+.br
+.EQ
+~~~~->~~ (define ~ id ~ (fn ~ ((GUARD ~ p ~::~ x sub g ) ~ x)))
+.EN
+.S
+.EQ
+fun ~ id ~ x sub ig = x
+.EN
+.br
+.EQ
+~~~~->~~ (define ~ id ~ (fn ~ ((GUARD ~ P ( rho ~ x sub ig ) ~::~
+G ( rho ~ x sub ig )) ~ x)))
+.EN
+.PA
+Here $x sub ig$ denotes an implicit guard. $GUARD$ is a primitive type of
+the Lite Abstract Machine. See the section on Implicit Guard Patterns
+(pg \n(R7) for definitions of the $rho$, $P$, and $G$ functions.
+.S
+Example:
+.PQ
+.EQ
+fun ~ id ~ f ~ x sub 1 = x sub 2
+~~->~~ (define ~ id
+~ (fn ~ ((GUARD ~ x sub 1 ~::~ (f ~ x sub 1 )) ~ x sub 2 )))
+.EN
+.PA
+Type declarations:
+.PQ
+.S
+.EQ
+"type" ~ ":id" = cons sub 1 ~|~ ... ~~->~~ 
+(define_type ~ ":id" ~ cons sub 1 ... )
+.EN
+.PA
+where each $cons$ denotes a
+.I "type constructor" .
+.S
+Exceptions:
+.PQ
+.S
+.EQ
+exception ~ ":id" ~~->~~ (define_type ~ ":id" ~ ":id")
+.EN
+.PA
+Fixity declarations ($R \(mo left { <,=,> right }$):
+.PQ
+.EE "$infix ~ id sub 1 ~ R ~ id sub 2 , ~ ... ~~->~~ ()$"
+.EE "$infixr ~ id sub 1 ~ R ~ id sub 2 , ~ ... ~~->~~ ()$"
+.EE "$nonfix ~ id , ~ ... ~~->~~ ()$"
+.PA
+These declarations do not compile to any code, but modify the internal
+infix operator table.
+.PQ
+.sp -1
+.sp \"XXX
+.SH "Local Declarations"
+.S
+.PA
+Local values:
+.PQ
+.S
+.EQ
+local ~ val ~ v sub 1 = x ~ in ~ val ~ v sub 2 = v sub 1 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ (v sub 1 ~ (define ~ v sub 2 ~ v sub 1 ))) ~ x)
+.EN
+.S
+.EQ
+local ~ val ~ v sub 1 = x sub 1 ~ "and" ~ v sub 2 = x sub 2 ~ in
+~ val ~ v sub 3 = v sub 2 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ ((v sub 1 ~ v sub 2 ) ~ (define ~ v sub 3 ~ v sub 2 )))
+~ x sub 1 ~ x sub 2 )
+.EN
+.S
+.EQ
+local ~ val ~ v sub 1 = x sub 1 ; ~ val ~ v sub 2 = v sub 1 ~ in
+~ val ~ v sub 3 = v sub 2 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ (v sub 1 ~ ((fn ~ (v sub 2 ~ (define ~ v sub 3 ~ v sub 2 )))
+~ v sub 1 ))) ~ x sub 1 )
+.EN
+.S
+.EQ
+local ~ val ~ v sub 1 = x sub 1 ~ in ~ val ~ v sub 2 = v sub 1 ~ "and" ~
+v sub 3 = v sub 1 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ (v sub 1 ~ ( mark (fn ~ ((v sub 2 ~ v sub 3 )
+~ (define ~ v sub 2 ~ v sub 2 )
+~ (define ~ v sub 3 ~ v sub 3 )))
+.EN
+.br
+.EQ
+lineup v sub 1 ~ v sub 1 )))
+.EN
+.br
+.EQ
+fwd 300 x sub 1 )
+.EN
+.S
+.EQ
+local ~ val ~ v sub 1 = x sub 1 ~ in ~ val ~ v sub 2 = v sub 1 ; ~
+val ~ v sub 3 = v sub 2 ~ end
+.EN
+.br
+.EQ
+~~~~->~~ ((fn ~ (v sub 1 ~ (begin ~ (define ~ v sub 2 ~ v sub 1 )
+~ (define ~ v sub 3 ~ v sub 2 )))) ~ x sub 1 )
+.EN
+.S
+.PA
+Local functions:
+.PQ
+.S
+.EQ
+local ~ fun ~ f ~ p = x ~ in ~ fun ~ g ~ p = x ~ end
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((f ~ (p ~ x))) ~ (define ~ g ~ (fn ~ (p ~ x))))
+.EN
+.S
+.EQ
+local ~ fun ~ f ~ p = x ~ "and" ~ g ~ p = x ~ in ~ fun ~ h ~ p = x ~ end
+.EN
+.br
+.EQ
+~~~~->~~ (letrec ~ ((f ~ (p ~ x)) ~ (g ~ (p ~ x)))
+~ (define ~ h ~ (fn ~ (p ~ x))))
+.EN
+.S
+.EQ
+local ~ fun ~ f ~ p = x ; ~ fun ~ g ~ p = x ~ in ~ fun ~ h ~ p = x ~ end
+.EN
+.br
+.EQ
+~~~~->~~ mark (letrec ~ ((f ~ (p ~ x)))
+.EN
+.br
+.EQ
+lineup ~~~~ (letrec ~ ((g ~ (p ~ x)))
+.EN
+.br
+.EQ
+lineup ~~~~~~~~ (define ~ h ~ (fn ~ (p ~ x)))))
+.EN
+.S
+.bp \"XXX
+.EQ
+local ~ fun ~ f ~ p = x ~ in ~ fun ~ g ~ p = x ~ "and" ~ h ~ p = x ~ end
+.EN
+.br
+.EQ
+~~~~->~~ mark (letrec ~ ((f ~ (p ~ x)))
+.EN
+.br
+.EQ
+lineup ~~~~ (letrec ~ ((g ~ (p ~ x)) ~ (h ~ (p ~ x)))
+.EN
+.br
+.EQ
+lineup ~~~~~~~~ (define ~ g ~ g)
+.EN
+.br
+.EQ
+lineup ~~~~~~~~ (define ~ h ~ h)))
+.EN
+.S
+.EQ
+local ~ fun ~ f ~ p = x ~ in ~ fun ~ g ~ p = x ; ~ fun ~ h ~ p = x ~ end
+.EN
+.br
+.EQ
+~~~~->~~ mark (letrec ~ ((f ~ (p ~ x)))
+.EN
+.br
+.EQ
+lineup ~~~~ (begin ~ (define ~ g ~ (fn ~ (p ~ x)))
+~ (define ~ h ~ (fn ~ (p ~ x)))))
+.EN
+.sp -1
+.SH "Derived Forms"
+.PA
+The $letrec$ and $define_type$ forms are
+.I "derived forms" ,
+i.e. they are composed of simpler LAM forms internally.
+.PQ
+.PA
+$letrec$ translates to $fn$ and $set!$:
+.PQ
+.FB
+(letrec              \h'|3.5c' \(-> \ \ ((fn ((f1 f2)
+   ((f1 (pat1 expr1)                (set! f1 (fn (pat1 expr1)
+  \h'0.18c'      (pat2 expr2)         \h'0.5c'                    (pat2 expr2))
+  \h'0.18c'      $...$)                 \h'1.3c'                   $...$)
+    (f2 (pat1 expr1)                (set! f2 (fn (pat1 expr1)
+  \h'0.18c'      (pat2 expr2)         \h'0.5c'                    (pat2 expr2)
+  \h'0.18c'      $...$))               \h'1.3c'                   $...$)))
+   expr $...$)                \h'0.62c'        ((fn (() expr $...$))))
+                  \h'1.4c'           undefined
+                  \h'1.4c'           undefined)
+.FE
+.PA
+$define_type$ translates to a set of $"define"$'s, the first one defining
+the type itself, the subsequent ones the constructors of the type:
+.PQ
+.S
+.EQ
+(define_type ~ ":id" ~ constructor ... )
+.EN
+.br
+.EQ
+~~~~->~~ (begin ~ mark (define ~ ":id" ~ '(":id" ~ constructor ... ))
+.EN
+.br
+.EQ
+lineup (define ~ ":id" ... )
+.EN
+.br
+.EQ
+lineup ... )
+.EN
+.PA
+Atomic constructors:
+.PQ
+.S
+.EQ
+":id" ~~->~~ (define ~ ":id" ~ "':id")
+.EN
+.PA
+Parametric constructors (carrying a variable object):
+.PQ
+.S
+.EQ
+(":id" ~ id) ~~->~~ (define ~ ":id" ~ (fn ~ (id ~ (list ~ "':id" ~ id))))
+.EN
+.PA
+Parametric constructors (carrying a typed object):
+.PQ
+.S
+.EQ
+(":id" sub 1 ~ ":id" sub 2 )
+.EN
+.br
+.EQ
+~~~~->~~ mark (define ~ ":id" sub 1 ~
+.EN
+.br
+.EQ
+lineup ~~~~ (fn ~ (x ~ (list ~ "':id" sub 1 ~ (%typecheck ~ ":id" sub 1 ~ x
+~ ":id" sub 2 )))))
+.EN
+.PA
+Example:
+.PQ
+.S
+.EQ
+(define_type ~ ":list" ~ ":nil" ~ (":cons" ~ x ~ ":list"))
+.EN
+.br
+.EQ
+~~~~->~~ (begin ~ mark (define ~ ":list" ~ '(":list" ~ :"nil" ~
+                                    (":cons" ~ x ~ ":list")))
+.EN
+.br
+.EQ
+lineup (define ~ ":nil" ~ "':nil")
+.EN
+.br
+.EQ
+lineup (define ~ ":cons"
+.EN
+.br
+.EQ
+lineup ~~~ (fn ~ ((x ~ list sub 1 )
+.EN
+.br
+.EQ
+lineup ~~~~~~ (list ~ "':cons" ~ x ~
+(%typecheck ~ "':cons" ~ list sub 1 ~ ":list"))))))
+.EN
+.TL ""
+.bp
+.sp -1
+.HD "mLite Reference"
+.SH "mLite/LAM Data Objects"
+.X R4
+.S
+.TS
+box tab(!);
+lfHB lfHB    lfHB
+lfH  lP+1fI  cP+1fI .
+Type!Examples!Designator
+boolean!$true$; $false$!b
+integer!$0$; $123$!n
+real!$0.0$; $3.14$; $1.23e6$!r
+char!$#"x"$; $#"space"$!c
+string!$"\"hello\""$; "\\"\\""!s
+unit!$()$!$()$
+tuple!$(x, y, z)$!T\v'+0.25v'\s-3k\s0\v'-0.25v'
+list!$[x, y, z]$; $[x :: [y]]$; $[]$!L
+vector!$newvec ~ (10, x)$!V
+function!$fn ~ x = x+1$!f
+instream!$instream ~ \"file\"$!SI
+outstream!$outstream ~ \"file\"$!SO
+identifier!$foo$; $f'$; $"=/="$!id
+constructor!:cons!:id
+.TE
+.S
+.PA
+.B Note:
+in LAM programs, there are no commas in lists and tuples, and function
+application is Scheme-like, e.g.:
+.PQ
+.EE "$(newvec ~ (tuple ~ 10 ~ x))$ instead of $newvec ~ (10, x)$."
+.PA
+As in Scheme, the sequences ``\\\\'' and ``\\"'' can be used to escape
+the corresponding characters inside of string literals. There are no other
+escape sequences.
+.PQ
+.PA
+The $unit$ object $()$ is used as an unspecific value. For example, it
+is passed to procedures not expecting any specific arguments and returned
+by procedures not returning any meaningful value.
+.PQ
+.PA
+$T sub k$ denotes a $k$-tuple, i.e. a tuple of $k$ elements. There are
+no tuples with $k=1$, because these would just denote single values, i.e.
+$(x) = x$ for any value $x$. The 0-tuple is equal to $unit$.
+.PQ
+.PA
+There are two groups of identifiers. One consists of letters, decimal
+digits, and the following special characters: underscore ($_$), apostrophe
+($'$), colon ($:$). These identifiers must begin with a non-digit character.
+They are case-sensitive.
+.PQ
+.PA
+The other group (``operator identifiers'') consist of sequences of the
+following special characters:
+.PQ
+.S
+.EQ
+delim off
+! ~~ @ ~~ $ ~~ % ~~ "^" ~~ & ~~ * ~~ - ~~ + ~~ = ~~ < ~~ > ~~ /
+~~ "" tilde ~~ `
+delim $$
+.EN
+.sp -1
+.SH "Predefined Infix Operators"
+.X R2
+.S
+.TS
+box tab(|);
+rfHB lfHB lfHB
+rfH  lfI  lfH .
+Precedence|Operators|Associativity
+_
+high|o|right
+_
+|^|right
+_
+|*  div  mod  rem  /|left
+_
+|+  \(mi|left
+_
+|::  @|right
+_
+low |<  <=  <>  =  >  >=|left
+|~<  ~<=  ~<>  ~=  ~>  ~>=|
+.TE
+.SH "Pattern Matching Algorithm"
+.X R1
+.LB
+.LI "$()$ matches $()$."
+.LI "$true$ matches $true$ and $false$ matches $false$."
+.LI "a number $x$ matches a number $y$, if $x = y$."
+.LI "a char $c sub 1$ matches a char $c sub 2$, if $c sub 1 = c sub 2$."
+.LI "a string $s sub 1$ matches a string $s sub 2$, if $s sub 1 = s sub 2$."
+.LI "the special pattern $_$ matches any object."
+.LI "an identifier $id$ matches any object and binds $id$ to that object."
+.LI "a list $L sub 1$ matches a list $L sub 2$, if $len~L sub 1 = len~L sub 2$"
+and each element $a sub i$ of $L sub 1$ matches the corresponding element
+$b sub i$ of $L sub 2$.
+.LI "the pattern $h ~::~ t$ matches a list of at least one element and
+binds the identifier $h$ to the first element of the list and the identifier
+$t$ to the rest of the list.
+.LI "a k-tuple $T sub k,1$ matches a k-tuple $T sub k,2$,"
+if each $#iT sub k,1$ matches $#iT sub k,2$ for $0 \(<= i < k$.
+.LI "a constant constructor $":id"$ matches itself."
+.LI "an exception $":exn"$ matches itself."
+.LI "a parametric constructor $":id" ~ (id sub 1 , ... )$"
+matches any object created by that constructor and binds any variables
+in the pattern to the corresponding values in the object.
+.LE
+.sp -1
+.SU "Implicit Guard Patterns"
+.X R7
+.PA
+Informally: an implicit guard is an expression inside of a pattern. Function
+application, infix operators, $or$, and $also$ are allowed inside of implicit
+guard expressions. Guards using function application or $=$ operators must
+be parenthesized to distinguish them from currying and function bodies.
+.PQ
+.PA
+The function $rho$ converts each implicit guard pattern to a tuple $(P, G)$
+consisting of an (unguarded) pattern $P$ and a guard expression $G$. $P~t$
+is the pattern component of the $(P, G)$ tuple $t$, and $G~t$ is its
+guard component. \(es means ``no guard expression''.
+.PQ
+.EE "$unit ~~->~~ (unit, \(es)$"
+.EE "$bool ~~->~~ (bool, \(es)$"
+.EE "$"int" ~~->~~ ("int", \(es)$"
+.EE "$real ~~->~~ (real, \(es)$"
+.EE "$str ~~->~~ (str, \(es)$"
+.EE "$id ~~->~~ (id, \(es)$"
+.PA
+Function application is the combination ($cdot$) of two identifiers,
+where the rightmost identifier is the pattern.
+.PQ
+.EE "$f ~ x ~~->~~ (f, \(es) cdot (x, \(es) ~~->~~ (x, f ~ x)$"
+.PA
+Higher order application:
+.PQ
+.EE "$f ~ g ~ x ~~->~~ (g, f ~ g) cdot (x, \(es) ~~->~~ (x, (f ~ g) ~ x)$"
+.PA
+Function composition:
+.PQ
+.FO "$f ~ (g ~ x) ~~->~~ (f, \(es) cdot (x, g ~ x) ~~->~~ (x, f ~ (g ~ x))$"
+.PA
+More generally ($f$ and $x$ may be be any expression):
+.PQ
+.EE "$rho ~ (f ~ x) ~~->~~ (P ( rho  ~ x), f' ~ x')$"
+.PA
+where $f' = G ~ ( rho ~ f)$, if $G ~ ( rho ~ f) != \(es$
+else $f' = P ~ ( rho ~ f)$.
+.br
+and $x' = G ~ ( rho ~ x)$, if $G ~ ( rho ~ x) != \(es$,
+else $x' = P ~ ( rho ~ x)$.
+.PQ
+.PA
+Tuples:
+.PQ
+.S
+.EQ
+(a sub 1 , a sub 2 , ... )
+.EN
+.br
+.EQ
+~~~~->~~ size +2 ( (P ~ ( rho ~ a sub 1 ), P ~ ( rho ~ a sub 2 ), ... ),
+~ G ~ ( rho ~ a sub 1 ) ~ also ~ G ~ ( rho ~ a sub 2 ) ~ also ...  size +2 )
+.EN
+.PA
+I.e. a tuple is converted to a tuple with each guarded pattern replaced
+by the corresponding unguarded pattern. The guard of the tuple is the
+conjunction of all guards in the tuple.
+.PQ
+.PA
+Lists work analogously:
+.PQ
+.S
+.EQ
+[a sub 1 , ... ] ~~->~~ size +2 ( [P ~ ( rho ~ a sub 1 ), ... ],
+~ G ~ ( rho ~ a sub 1 ) ~ also ... size +2 )
+.EN
+.PA
+The guard $G ~ ( rho ~ p)$ of an unguarded pattern $p$ may be thought of
+as $true$, although an actual implementation would simply omit the guard
+in the conjunction.
+.PQ
+.PA
+Infix expressions: for each infix operator $R$,
+.PQ
+.EE "$id ~ R ~ x ~~->~~ (id, R ~ (id, x))$"
+.EE "$x ~ R ~ id ~~->~~ (id, R ~ (x, id))$"
+.EE "$id sub 1 ~ R ~ id sub 1 ~~->~~ (id sub 1 , R ~ (id sub 1 , id sub 1 ))$"
+.PA
+Also note that:
+.PQ
+.EE "$id sub 1 ~ R ~ id sub 2 ~~->~~ error$"
+.PA
+That is, only one single identifier may be contained in an infix
+expression $x$, and that identifier will be the resulting unguarded
+pattern $P ~ ( rho ~ x)$. However, the single identifier may appear
+multiple times, e.g.:
+.PQ
+.S
+.EQ
+rho ~ (10 < id ~ also ~ id < 20) ~~->~~ (id, 10 < id ~ also ~ id < 20)
+.EN
+.PA
+The detailed conversion rules for infix expression are rather
+elaborate. For a complete formal description see [HOL14].
+.PQ
+.sp -1
+.TL ""
+.bp \"XXX
+.sp -1 \"XXX
+.SH "mLite Syntax Summary"
+.sp -1
+.SU "Declarations"
+.EE "$val ~ p = x ~ "and" ...$"
+.PA
+Bind variables of pattern $p$ to corresponding components of expression $x$.
+Expressions in bindings chained with $"and"$ evaluate
+.I before
+binding any values.
+.PQ
+.S
+.EQ
+fun ~ id ~ p ~ [where ~ x sub g ] = x ~|~  ... ~ "and" ~ ...
+.EN
+.br
+.EQ
+fun ~ id ~ p ... ~ [where ~ x sub g ] = x ~ "and" ~ ...
+.EN
+.PA
+Bind each identifier $id$ to the corresponding function
+.PQ
+.ti +0.5i
+.EE "$fn ~ p = x ~ | ~ ...$"
+.PA
+Multiple patterns $p,q ...$ indicate currying, e.g.:
+.PQ
+.ti +0.5i
+.EE "$fn ~ p ~ q ... = x ~~ roman equals ~~ fn ~ p = fn ~ q = ... x$"
+.PA
+Note that multiple patterns (separated by $|$)
+.I cannot
+be combined with currying. Each function is
+.I either
+curried
+.I or
+has multiple cases.
+.PQ
+.PA
+Multiple $fun$ declarations chained together with $"and"$ may be mutually
+recursive, even in local ($let$, $local$) contexts.
+.PQ
+.PA
+The $where$ keyword introduces an explicit
+.I "guard expression" .
+A pattern matches only if $x sub g$ evaluates to a non-$false$ value.
+.PQ
+.PA
+Each pattern $p$ may contain
+.I "implicit guards" ;
+see the corresponding section in this reference (pg \n(R7) for details.
+.PQ
+.S
+.EQ 
+"type" ~ ":id" = cons ~ | ~ ...
+.EN
+.PA
+Define algebraic type $":id"$ as union of the subsequent constructors.
+Each constructor may be of the form $":id"$, defining an atomic instance
+of the type, or of the form
+.PQ
+.ti +0.5i
+.EE "$:id ~ ( id ... )$"
+.PA
+where each $id$ may be an (untyped) variable or a type name. A
+constructor containing a type name in a formal argument expects a value
+of the given type in the corresponding actual argument. E.g., the
+constructor $":c"$ defined in
+.PQ
+.S
+.ti +0.5i
+.EQ
+"type" ~ ":L" = ":N" ~ | ~ ":c" ~ (x, ":L")
+.EN
+.PA
+would accept any type of argument in the place of $x$, but only values
+of the type $":L"$ in the second slot of its argument.
+.PQ
+.S
+.EQ
+local ~ ldecl sub 1,1 ; ~ ... in ~ ldecl sub 2,1 ; ~ ... ~ end
+.EN
+.PA
+First evaluate the $ldecl sub 1$'s, giving a new environment $E$, then
+evaluate the $ldecl sub 2$'s in that environment, adding them to the
+top level environment. Eventually remove the environment $E$, but keep
+the bindings established by $ldecl sub 2$.
+.PQ
+.PA
+I.e.: define $ldecl sub 2$ in a local context containing $ldecl sub 1$,
+hiding the $ldecl sub 1$'s from the top level.
+.PQ
+.PA
+Each $ldecl$ may be a $val$ or a $fun$ declaration.
+.PQ
+.X RA
+.EE "$infix ~ id sub 1 ~ left { <,=,> right } ~ id sub 2 , ...$"
+.PA
+Add the identifier $id sub 1$ to the internal operator precedence table
+as a left-associative operator. After adding the identifier to the table,
+it will be recognized as an infix operator, so $x ~ id sub 1 ~ y$ will
+map to $id sub 1 ~(x, y)$. 
+.PQ
+.PA
+The less/equal/greater sign together with the second identifier $id sub 2$
+defines the precedence of the $id sub 1$ operator:
+.PQ
+.S
+.TS
+box tab(|);
+l | l .
+$id sub 1 < id sub 2$ | $id sub 1$ has lower precedence than $id sub 2$
+$id sub 1 = id sub 2$ | $id sub 1$ has the same precedence as $id sub 2$
+$id sub 1 > id sub 2$ | $id sub 1$ has higher precedence than $id sub 2$
+.TE
+.PA
+$infix$ itself does not define the operator, it merely makes it known
+to the mLite parser.
+.PQ
+.EE "$infixr ~ id sub 1 ~ left { <,=,> right } ~ id sub 2 , ...$"
+.PA
+The $infixr$ operator works exactly as the $infix$ operator (above), but
+adds $id sub 1$ as a
+.I right-associative
+operator.
+.PQ
+.EE "$nonfix ~ id, ...$"
+.PA
+The $nonfix$ declaration removes the given identifiers from the internal
+operator precedence table. After $nonfix$-ing an identifier, it will no
+longer parse as an infix operator (but may still be used as a function).
+.PQ
+.sp -1
+.TL \"XXX
+.bp \"XXX
+.sp -1 \"XXX
+.SU "Expressions"
+.S
+.EQ
+unit, bool, "int", real, char, str
+.EN
+.PA
+The atomic data types evaluate to themselves.
+.PQ
+.EE "$(x sub 1 , ... , x sub k )$"
+.PA
+The k-tuple notation (a tuple of $k$ elements) evaluates to a k-tuple with
+all its elements in normal form, i.e.:
+$(eval ~ (x sub 1 ) , ... , eval ~ (x sub k ))$.
+.PQ
+.EE "$[x sub 1 , ... ]$"
+.PA
+List notation evaluates to a list with all elements in normal form, i.e.:
+$[eval ~ (x sub 1 ) , ... ]$.
+.PQ
+.EE "$fn ~ p sub 1 ... = x sub 1 ~ | ~ ...$"
+.PA
+The $fn$ syntax evaluates to a function from patterns $p sub i$ to
+expressions $x sub i$. The vertical bar separates individual cases.
+Multiple patterns between $fn$ and $=$ indicate currying. See $fun$
+for details.
+.PQ
+.PA
+In a curried function, an explicit guard is associated with the innermost
+function, e.g.:
+.br
+$fn ~ a ~ b ~ c ~ where ~ g = x ~~$ equals
+$~~ fn ~ a = fn ~ b = fn ~ c ~ where ~ g = x$.
+.PQ
+.EE "$f ~ x$"
+.PA
+Juxtaposition of a function $f$ and an object $x$ applies the function
+$f$ to $x$. Furthermore:
+.PQ
+.in +0.5i
+.EE "$f ~ g ~ x ~~=~~ (f ~ g) ~ x$"
+.EE "$f ~ (g ~ x) ~~=~~ f ~ (g ~ x)$"
+.EE "$f ~ ` ~ g ~ x ~~=~~ f ~ (g ~ x)$"
+.in -0.5i
+.EE "$x sub 1 ~R~ x sub 2$"
+.PA
+Functions defined as infix operators ($R$; see $infix$, pg \n(RA) may be
+used as operators in infix expressions. See the operator table on page
+\n(R2 for a full list of pre-defined operators. The usual precedence and
+associativity rules apply, e.g.:
+.PQ
+.in +0.5i
+.EE "$a - b - c ~~=~~ ((a - b) - c)$"
+.EE "$a*b + c*d ~~=~~ (a*b) + (c*d)$"
+.in -0.5i
+.PA
+Also note:
+.PQ
+.in +0.5i
+.EE "$f ~ x ~ R ~ y ~~=~~ (f ~ x) ~ R ~ y$"
+.EE "$f ~`~ x ~ R ~ y ~~=~~ f ~ (x ~ R ~ y)$"
+.in -0.5i
+.EE "$#"int" T sub k$"
+.PA
+This is a shorthand form of $ref ~ (T sub k , "int")$.
+.PQ
+.EE "$(x sub 1 ; x sub 2 ; ... )$"
+.PA
+Evaluate the given expression in sequence, from left to right. Usually
+used for effect.
+.PQ
+.EE "$x sub 1 ~ also ~ ... ~ also ~ x sub n$"
+.PA
+Evaluate to the first $false$ expression $x sub i$ or to $x sub n$ if
+all prior expressions evaluated to non-$false$ values. $false ~ also ~ x$
+never evaluates $x$.
+.PQ
+.EE "$x sub 1 ~ or ~ x sub 2 ~ or ~ ...$"
+.PA
+Evaluate to the first non-$false$ expression $x sub i$ or to $false$, if all
+expressions are false. $true ~ or ~x$ never evaluates $x$.
+.PQ
+.S
+.EQ
+x sub 0 ~ handle ~ ":id" sub 1 = x sub 1 ~ | ~ ...
+.EN
+.PA
+Evaluate $x sub 0$ with the exception handler
+$fn ~ ":id" sub 1 = x sub 1 ~|~ ...$ in effect. Raising any $":id" sub i$
+defined in the exception handler will evaluate and return the corresponding
+$x sub i$.
+.PQ
+.S
+.EQ
+raise ~ ":id"
+.EN
+.PA
+Raise the exception $":id"$. Raising an exception aborts the current
+computation and invokes the innermost handler handling the given
+exception. Exceptions without a handler terminate program execution.
+.PQ
+.S
+.EQ
+"if" ~ x sub 1 ~ then ~ x sub 2 ~ else ~ x sub 3
+.EN
+.PA
+First evaluate $x sub 1$. If it evaluates to a non-$false$ result,
+evaluate and return $x sub 2$ else evaluate and return $x sub 3$.
+.PQ
+.EE "$case ~ x sub 0 ~ of ~ p sub 1 = x sub 1 ~|~ ...$"
+.PA
+An alternative form of
+$(fn ~ p sub 1 = x sub 1 ~|~ ... ) ~ x sub 0$.
+.PQ
+.bp \"XXX
+.EE "$x sub 1 >> x sub 2$"
+.PA
+Evaluate expression $x sub 2$ with program input read from $x sub 1$.
+$x sub 1$ must evaluate to an $instream$ object.
+.PQ
+.EE "$x sub 1 << x sub 2$"
+.PA
+Evaluate expression $x sub 2$ with program output written to $x sub 1$.
+$x sub 1$ must evaluate to an $outstream$ object.
+.PQ
+.sp -1
+.SH "mLite Function Summary"
+.X R3
+.sp -1
+.SU "Arithmetics"
+.EE "$ r sub 1 * r sub 2 ~~->~~ r$"
+.PA
+Return the product of $ r sub 1$ and $r sub 2$.
+.PQ
+.EE "$r sub 1 + r sub 2 ~~->~~ r$"
+.PA
+Return the sum of $r sub 1$ and $r sub 2$.
+.PQ
+.EE "$r sub 1 - r sub 2 ~~->~~ r$"
+.PA
+Return the difference between $r sub 1$ and $r sub 2$.
+.PQ
+.EE "$r sub 1 ~/~ r sub 2 ~~->~~ r$"
+.PA
+Return the quotient of $r sub 1$ and $r sub 2$.
+.PQ
+.S
+.EQ
+r sub 1 "<"  r sub 2 ~|~
+r sub 1 "<=" r sub 2 ~|~
+r sub 1 "<>" r sub 2 ~|~
+r sub 1 "="  r sub 2 ~|~
+r sub 1 ">"  r sub 2 ~|~
+r sub 1 ">=" r sub 2 ~~->~~ b
+.EN
+.PA
+These functions implement the ``less-than'', ``less/equal'', ``not-equal'',
+``equal'', ``greater-than'', and ``greater/equal'' predicates, respectively.
+They return $true$, if their conditions apply.
+.PQ
+.S
+.EQ
+c sub 1 "<"  c sub 2 ~|~
+c sub 1 "<=" c sub 2 ~|~
+c sub 1 "<>" c sub 2 ~|~
+c sub 1 "="  c sub 2 ~|~
+c sub 1 ">"  c sub 2 ~|~
+c sub 1 ">=" c sub 2 ~~->~~ b
+.EN
+.PA
+The domain of the above predicates also covers the char type. When
+applied to two chars,
+.PQ
+.ti +0.5i
+.EE "$c sub 1 ~R~ c sub 2$"
+.PA
+holds, if and only if
+.PQ
+.ti +0.5i
+.EE "$ord ~ c sub 1 ~R~ ord ~ c sub 2$"
+.PA
+for any operator $R$ of the above set.
+.PQ
+.S
+.bp \"XXX
+.EQ
+s sub 1 "<"  s sub 2 ~|~
+s sub 1 "<=" s sub 2 ~|~
+s sub 1 "<>" s sub 2 ~|~
+s sub 1 "="  s sub 2 ~|~
+s sub 1 ">"  s sub 2 ~|~
+s sub 1 ">=" s sub 2 ~~->~~ b
+.EN
+.PA
+The domain of the above predicates also covers the string type. The final
+character of each string is assumed to be NUL. So, $s sub 1 < s sub 2$,
+if and only if there is a position $p$ so that
+.PQ
+.S
+.ti +0.5i
+.EQ
+ref ~ (s sub 1 , p) < ref ~ (s sub 2 , p)
+.EN
+.PA
+and each
+.PQ
+.S
+.ti +0.5i
+.EQ
+ref ~ (s sub 1 , i) = ref ~ (s sub 2 , i)
+.EN
+.PA
+for $0 <= i < p$.
+.PQ
+.PA
+$s sub 1 > s sub 2$, if $s sub 2 < s sub 1$. $s sub 1 "<=" s sub 2$, if not
+$s sub 2 > s sub 1$. $s sub 1 ">=" s sub 2$, if not $s sub 1 < s sub 2$.
+.PQ
+.PA
+$s sub 1 = s sub 2$, if $len ~ s sub 1 = len ~ s sub 2$ and all
+$ref ~ (s sub 1 , i) = ref ~ (s sub 2 , i)$ for $0 <= i < k$, where
+$k = len ~ s sub 1$. $s sub 1 <> s sub 2$, if not $s sub 1 = s sub 2$.
+.PQ
+.EE "$x = b ~|~ x = [] ~|~ x = () ~~->~~ b$"
+.PA
+The $=$ operator can be safely applied to any type of object, as long as
+the other object is a bool, or the empty list, or unit. In this case, it
+returns $true$, when the two objects are identical. It returns $false$,
+if the objects are not identical \(em this includes the case that
+the objects have incompatible types, e.g. $123 = () ~->~ false$.
+.PQ
+.EE "$abs ~ r ~~->~~ r$"
+.PA
+Return the magnitude $|r|$ of $r$.
+.PQ
+.EE "$ceil ~ r ~~->~~ n$"
+.PA
+Return $left ceil r right ceil$ \ (ceiling of $r$, the smallest
+integer that is not smaller than $r$).
+.PQ
+.EE "$n sub 1 ~ div ~ n sub 2 ~~->~~ n$"
+.PA
+Return $left floor n sub 1 / n sub 2 right floor$
+\ (the floored quotient of $n sub 1$ and $n sub 2$).
+.PQ
+.EE "$floor ~ r ~~->~~ n$"
+.PA
+Return $left floor r right floor$
+\ (the largest integer that is not larger than $r$).
+.PQ
+.EE "$gcd ~ (n sub 1 , n sub 2 ) ~~->~~ n$"
+.PA
+Return the
+.I "greatest common divisor"
+of $n sub 1$ and $n sub 2$, i.e. the largest integer that divides both
+$n sub 1$ and $n sub 2$.
+.PQ
+.bp \"XXX
+.EE "$lcm ~ (n sub 1 , n sub 2 ) ~~->~~ n$"
+.PA
+Return the
+.I "least common multiple"
+of $n sub 1$ and $n sub 2$, i.e. the smallest integer that is a multiple
+of both $n sub 1$ and $n sub 2$.
+.PQ
+.EE "$max ~ (r sub 1 , r sub 2 ) ~~->~~ r$"
+.PA
+Return the larger one of the numbers $r sub 1$ and $r sub 2$.
+Return a real number, if at least one of the numbers is a real
+number, else return an integer.
+.PQ
+.EE "$min ~ (r sub 1 , r sub 2 ) ~~->~~ r$"
+.PA
+Return the smaller one of the numbers $r sub 1$ and $r sub 2$.
+Return a real number, if at least one of the numbers is a real
+number, else return an integer.
+.PQ
+.EE "$n sub 1 ~ mod ~ n sub 2 ~~->~~ n$"
+.PA
+Return $n sub 1 - left floor n sub 1 / n sub 2 right floor cdot n sub 2$
+\ (the modulus of $n sub 1$ and $n sub 2$).
+.PQ
+.EE "$f sub 1 ~o~ f sub 2 ~~->~~ f$"
+.PA
+Return the function composition $fn ~ x = f sub 1 ~ (f sub 2 ~ x)$.
+.PQ
+.EE "$n sub 1 ~rem~ n sub 2 ~~->~~ n$"
+.PA
+Return $n sub 1 - trunc ~ ( n sub 1 / n sub 2 ) cdot n sub 2$
+\ (the truncated division remainder of $n sub 1$ and $n sub 2$).
+.PQ
+.EE "$sgn ~ r ~~->~~ n$"
+.PA
+Return the
+.I sign
+of $r$: $r < 0 ->  -1$, $r > 0 -> 1$, and $r = 0 -> 0$.
+.PQ
+.EE "$trunc ~ r ~~->~~ n$"
+.PA
+Return $sgn(r) cdot left floor |r| right floor$ \ (in other words: remove
+the fractional part of $r$ and return the integer part only).
+.PQ
+.EE "$"sqrt" ~ r ~~->~~ r$"
+.PA
+Return $sqrt r$.
+.EN
+.PQ
+.EE "$r sub 1 ~"^"~ r sub 2 ~~->~~ r$"
+.PA
+Return $x sup y$, where $x = r sub 1$ and $y = r sub 2$.
+.PQ
+.bp \"XXX
+.EE "$"~" r ~~->~~ r$"
+.PA
+Return $-r$, the negative value of $r$.
+.PQ
+.S
+.EQ
+r sub 1 "~<"  r sub 2 ~|~
+r sub 1 "~<=" r sub 2 ~|~
+r sub 1 "~<>" r sub 2 ~|~
+r sub 1 "~="  r sub 2 ~|~
+r sub 1 "~>"  r sub 2 ~|~
+r sub 1 "~>=" r sub 2 ~~->~~ b
+.EN
+.PA
+For numbers, these operators are identical to $<$, $"<="$,, $=$, etc.
+.PQ
+.S
+.EQ
+c sub 1 "~<"  c sub 2 ~|~
+c sub 1 "~<=" c sub 2 ~|~
+c sub 1 "~<>" c sub 2 ~|~
+c sub 1 "~="  c sub 2 ~|~
+c sub 1 "~>"  c sub 2 ~|~
+c sub 1 "~>=" c sub 2 ~~->~~ b
+.EN
+.PA
+These are shorthand notations for
+.PQ
+.ti +0.5i
+.EE "$c_downcase ~ c sub 1 ~R~ c_downcase ~ c sub 2$"
+.PA
+where $R$ is in $left { <, "<=", =, <>, >, ">=" right }$.
+.PQ
+.S
+.EQ
+s sub 1 "~<"  s sub 2 ~|~
+s sub 1 "~<=" s sub 2 ~|~
+s sub 1 "~<>" s sub 2 ~|~
+s sub 1 "~="  s sub 2 ~|~
+s sub 1 "~>"  s sub 2 ~|~
+s sub 1 "~>=" s sub 2 ~~->~~ b
+.EN
+.PA
+These are equal to their counterparts ($<$, $"<="$, $=$, etc),
+but use the above case-folding variants of the comparison operators
+to compare individual characters.
+.PQ
+.sp -1
+.sp \"XXX
+.SU "Structural Operations"
+.PA
+Many functions in this section are curried higher-order functions. The
+signatures of these functions are specified like this:
+.PQ
+.ti +0.5i
+.EE "$map ~ f ~ L ~~->~~ L$"
+.PA
+which makes the function appear to take more than one argument. However,
+the above is merely a shorthand notation for
+.PQ
+.ti +0.5i
+.EE "$map ~ f ~~->~~ L ~~->~~ L$"
+.PA
+So, for example, $map$ is always applied to a single unary function,
+giving another function $L -> L$, which may then be applied on the spot
+to a list. E.g.: $map ~ (fn ~ x=2"^"x) ~ [1,2,3,4,5]$.
+.PQ
+.EE "$x ~::~ L ~~->~~ L$"
+.PA
+Attach a new element $x$ to the front of an existing list $L$,
+giving a new list.
+.PQ
+.EE "$L sub 1 @ L sub 2 ~~->~~ L$"
+.PA
+Return a new list that consists of the concatenation of $L sub 1$ and
+$L sub 2$.
+.PQ
+.bp \"XXX
+.EE "$s sub 1 @ s sub 2 ~~->~~ s$"
+.PA
+Return a new string that consists of the concatenation of the strings
+$s sub 1$ and $s sub 2$.
+.PQ
+.EE "$append_map ~ f ~ L ~~->~~ L$"
+.PA
+$append_map$ is like $map$, but appends the elements of its result rather
+than consing them, i.e.:
+.PQ
+.ti +0.5i
+.EE "$append_map ~ f ~ [a, b, c]$"
+.PA
+would be equal to
+.PQ
+.ti +0.5i
+.EE "$f ~ a ~ @ ~ f ~ b ~ @ ~ f ~ c$"
+.EE "$clone ~ x ~~->~~ x$"
+.PA
+Return an exact copy of the object $x$. Note that only vectors are
+actually cloned by this function, because all other data types are
+immutable.
+.PQ
+.EE "$x sub 1 ~ eql ~ x sub 2 ~~->~~ b$"
+.PA
+The $eql$ function is an extension of the $=$ operator that covers all
+data types of the mLite language and also allows to compare incompatible
+types, resulting in $false$.
+.PQ
+.PA
+Lists, vectors, and tuples are compared element-wise and recursively.
+This function is similar to Scheme's ``equal?'' procedure.
+.PQ
+.EE "$explode ~ s ~~->~~ L$"
+.PA
+Return a new list that contains the same characters as the string $s$
+in the same order. This is the reverse operation of $implode$.
+.PQ
+.EE "$filter ~ f ~ L ~~->~~ L$"
+.PA
+Return a new list containing all elements $x sub i$ satisfying the condition
+$f~x sub i$ from the list $L$.
+.PQ
+.EE "$fold ~ (f, x) ~ L ~~->~~ L$"
+.PA
+Fold the list $L$ by applying $f$ to the neutral element $x$
+and the first element of $L$ (giving a result $R$) and then applying
+$f$ to $R$ and the second element of $L$, etc.
+.PQ
+.PA
+Formally, $fold ~ (f, x) ~ [a, b, c]$ is equal to
+$f ~ (f ~ (f ~ (x, a), b), c)$.
+.PQ
+.EE "$foldr ~ (f, x) ~ L ~~->~~ L$"
+.PA
+The $foldr$ function is like $fold$, but folds the list $L$ to
+the right, so
+.PQ
+.PA
+$foldr ~ (f, x) ~ [a, b, c]$ is equal to $f ~ (a, f ~ (b, f ~ (c, x)))$.
+.PQ
+.EE "$foreach ~ f ~ L ~~->~~ ()$"
+.PA
+The $foreach$ function is like $map$, but calls $f$ only for effect. It
+does not collect any result and always returns $()$.
+.PQ
+.EE "$head ~ L ~~->~~ x$"
+.PA
+Return the first element of a list.
+.PQ
+.EE "$implode ~ L ~~->~~ s$"
+.PA
+Return a new string that contains the same characters as the list $L$
+in the same order. This is the reverse operation of $explode$.
+.PQ
+.S
+.EQ
+"iota" ~ n ~~->~~ L
+.EN
+.PA
+Return a list $[1, 2, ... , n]$.
+.PQ
+.S
+.EQ
+"iota" ~ (n sub 1 , n sub 2 ) ~~->~~ L
+.EN
+.PA
+Return a list  $[n sub 1 , n sub 1 + 1 , ... , n sub 2 ]$.
+.PQ
+.EE "$len ~ T sub k ~|~ len ~ L ~|~ len ~V ~|~ len ~ s ~~->~~ n$"
+.PA
+Return the length of the given data object. For lists and vectors,
+this is the number of elements, for strings the number of characters,
+for tuples, their order.
+.PQ
+.EE "$map ~ f ~ L ~~->~~ L$"
+.PA
+Map the function $f$ over the list $L$, generating a new list
+.PQ
+.ti +0.5i
+.EE "$[f ~ a sub 1 , f ~ a sub 2 , ... ]$"
+.PA
+where each $a sub i$ is an element of $L$.
+.PQ
+.EE "$newstr ~ (n, c) ~~->~~ s$"
+.PA
+Return a new string of the length $n$ containing the character $c$
+in all positions of the string.
+.PQ
+.bp \"XXX
+.EE "$newvec ~ (n, x) ~~->~~ V$"
+.PA
+Return a new vector of the length $n$ containing the element $x$
+in all slots of the vector.
+.PQ
+.EE "$order ~ x ~~->~~ n$"
+.PA
+Return the order of $x$. The order of each  ``true'' tuple $T sub k$ is
+$k$. The order of $()$ is zero, and the order of all other objects
+is one, i.e. all singular objects are 1-tuples.
+.PQ
+.EE "$ref ~ (L, n) ~|~ ref ~ (T sub k , n) ~|~ ref ~ (V, n) ~~->~~ x$"
+.PA
+Extract the $n$'th element of the given data object. Extracting an
+element from a vector is guaranteed to be an $O(1)$ operation.
+.PQ
+.EE "$ref ~ (s, n) ~~->~~ c$"
+.PA
+Extract the $n$'th char of the string $s$.
+.PQ
+.EE "$rev ~ L ~~->~~ L$"
+.PA
+Return a new list containing the elements of $L$ in reverse order.
+.PQ
+.EE "$rev ~ s ~~->~~ s$"
+.PA
+Return a new string containing the characters of the string $s$
+in reverse order.
+.PQ
+.S
+.EQ
+"set" ~ (T sub k , n, x) ~~->~~ T sub k
+.EN
+.PA
+Return a copy of the tuple $T sub k$ with the $n$'th element replaced by $x$.
+.PQ
+.S
+.EQ
+"set" ~ (s, n, c) ~~->~~ s
+.EN
+.PA
+Return a copy of the string $s$ with the $n$'th char replaced by $c$.
+.PQ
+.S
+.EQ
+"set" ~ (V, n, x) ~~->~~ V
+.EN
+.PA
+Change the $n$'th element of the vector $V$ to $x$.
+.br
+.B Note:
+this will mutate $V$!
+.PQ
+.EE "$setvec (V, n sub 1 , n sub 2 , x) ~~->~~ V$"
+.PA
+Change the elements in the slots $n sub 1 ... n sub 2 - 1$ of the vector
+$V$ to $x$.
+.br
+.B Note:
+this will mutate $V$!
+.PQ
+.S
+.bp \"XXX
+.EQ
+"sub" ~ (L, n sub 1 , n sub 2 ) ~~->~~ L
+.EN
+.PA
+Return a new list containing the elements at positions
+$n sub 1 ... n sub 2 - 1$ of the original list $L$.
+.PQ
+.S
+.EQ
+"sub" ~ (s, n sub 1 , n sub 2 ) ~~->~~ s
+.EN
+.PA
+Return a new string containing the characters at positions
+$n sub 1 ... n sub 2 - 1$ of the original string $s$.
+.PQ
+.EE "$tail ~ L ~~->~~ L$"
+.PA
+Return the tail (all but the first element) of a list.
+.PQ
+.EE "$zip ~ L sub 1 ~ L sub 2 ~~->~~ L$"
+.PA
+Combine the lists $L sub 1$ and $L sub 2$ pairwise, returning a list of
+tuples:
+.PQ
+.ti +0.5i
+.EE "$zip ~ [1,2,3] ~ [4,5,6] ~~->~~ [(1,4), (2,5), (3,6)]$"
+.PA
+This is identical to $zipwith ~ (fn ~ x = x)$.
+.PQ
+.EE "$zipwith ~ f ~ L sub 1 ~ L sub 2 ~~->~~ L$"
+.PA
+Combine the lists $L sub 1$ and $L sub 2$ pairwise using the function $f$,
+so that
+.PQ
+.ti +0.5i
+.EE "$zipwith ~ f ~ [1,2,3] ~ [4,5,6]$"
+.PA
+would be equal to
+.PQ
+.ti +0.5i
+.EE "$[f ~ (1,4), f ~ (2,5), f ~ (3,6)]$"
+.sp -1
+.sp \"XXX
+.SU "Type Predicates and Conversion"
+.EE "$bool ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is a boolean.
+.PQ
+.EE "$char ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is a char.
+.PQ
+.EE "$chr ~ n ~~->~~ c$"
+.PA
+Return the character at the code point $n$. Inverse operation: $ord$.
+.PQ
+.S
+.EQ
+"int" ~ x ~~->~~ b
+.EN
+.PA
+Return $true$, if $x$ is an integer.
+.PQ
+.bp \"XXX
+.EE "$not ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is $false$, else return $false$ 
+(logical ``not''; all values but $false$ are considered to be ``true'').
+.PQ
+.EE "$ntos ~ r ~~->~~ s$"
+.PA
+Return a string representation of the number $r$. Negative numbers will
+have a ``-'' prefix.
+.PQ
+.EE "$ord ~ c ~~->~~ n$"
+.PA
+Return the code point of the character $c$.
+Inverse operation: $chr$.
+.PQ
+.EE "$real ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is a real number. Note: $"int" ~ x$ implies
+$real ~ x$.
+.EE "$ston ~ s ~~->~~ r ~|~ false$"
+.PA
+Convert a numeric string to a number. If the string $s$ contains a decimal
+point (``.''), return a real number, otherwise return an integer. Both 
+``$-$'' and ``$""tilde$'' will be accepted as a leading minus sign. When $s$
+does not represent a valid number, $ston$ will return $false$.
+.PQ
+.PQ
+.EE "$str ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is a string.
+.PQ
+.S
+.EQ
+"vec" ~ x ~~->~~ b
+.EN
+.PA
+Return $true$, if $x$ is a vector.
+.PQ
+.sp -1
+.sp \"XXX
+.SU "Char Functions"
+.EE "$c_alphabetic ~ c ~~->~~ b$"
+.PA
+Return $true$, if $c$ is a letter of the English alphabet.
+.PQ
+.EE "$c_downcase ~ c ~~->~~ c$"
+.PA
+If $c_upper ~ c$, return the lower-case variant of $c$, else return $c$.
+.PQ
+.EE "$c_lower ~ c ~~->~~ b$"
+.PA
+Return $true$, if $c$ is a lower-case letter of the English alphabet.
+.PQ
+.bp \"XXX
+.EE "$c_numeric ~ c ~~->~~ b$"
+.PA
+Return $true$, if $c$ is a decimal digit.
+.PQ
+.EE "$c_upcase ~ c ~~->~~ c$"
+.PA
+If $c_lower ~ c$, return the upper-case variant of $c$, else return $c$.
+.PQ
+.EE "$c_upper ~ c ~~->~~ b$"
+.PA
+Return $true$, if $c$ is an upper-case letter of the English alphabet.
+.PQ
+.EE "$c_whitespace ~ c ~~->~~ b$"
+.PA
+Return $true$, if $c$ is a non-printing character (blank, or ASCII HT,
+LF, CR, or FF).
+.PQ
+.sp -1
+.SU "Input/Output Functions"
+.EE "$append_stream ~ s ~~->~~ SO$"
+.PA
+Open the file $s$ for writing and return an $outstream$ object for
+accessing that file. When the file already exists, append output to
+the existing file.
+.PQ
+.EE "$close ~ SI ~|~ close ~ SO ~~->~~ ()$"
+.PA
+Close the given $instream$ or $outstream$. Note that streams are also
+closed automatically (by the garbage collector), so there is normally
+no need to use $close$, except for the rare case where output must be
+committed at a specific point during program execution.
+.PQ
+.EE "$eof ~ x ~~->~~ b$"
+.PA
+Return $true$, if $x$ is an end-of-file indicator (EOF), as delivered by
+$readc$, $peekc$, and $readln$.
+.PQ
+.EE "$instream ~ s ~~->~~ SI$"
+.PA
+Open the file $s$ for reading and return an $instream$ object for
+accessing that file. An error is reported, if the file does not exist.
+.PQ
+.EE "$load ~ s ~~->~~ ()$"
+.PA
+Load the program in the file $s$ as if typed in at the mLite prompt.
+When an error occurs, stop loading.
+.PQ
+.bp \"XXX
+.EE "$outstream ~ s ~~->~~ SO$"
+.PA
+Open the file $s$ for writing and return an $outstream$ object for
+accessing that file. When the file already exists, it is truncated to
+zero length.
+.PQ
+.EE "$peekc ~ () ~~->~~ c$"
+.PA
+Read a character from the current input stream and return it. Do
+.I not
+consume the input character, i.e. a subsequent read operation will
+yield the same character again. When there are no (more) characters
+to be read from the stream, return EOF.
+.PQ
+.EE "$print ~ x ~~->~~ ()$"
+.PA
+Write a suitable representation of the expression $x$ to the current
+output stream.
+.PQ
+.EE "$println ~ x ~~->~~ ()$"
+.PA
+Shorthand for $(print ~ x; print ~ #"\"newline\"")$.
+.PQ
+.EE "$readc ~ () ~~->~~ c$"
+.PA
+Read a character from the current input stream and return it. When there
+are no (more) characters to be read from the stream, return EOF.
+.PQ
+.FO "$readln ~ () ~~->~~ s$"
+.PA
+Read one line of characters from the current input stream and return it.
+A line is delimited by a platform-specific newline sequence or the EOF.
+When there are no (more) characters to be read from the stream, return
+EOF.
+.PQ
+.TL ""
+.bp
+.sp -1
+.HD "Appendix"
+.SH "mLite Grammar"
+.S
+.TS
+tab(|);
+lfH lfH .
+$;;~ comment$     | is a comment to the end of line.
+$(*~ comment ~*)$ | is a nestable block comment.
+.TE
+.S
+.PA
+The $&$ grammar operator indicates that no spaces are allowed between two
+sequences, i.e. it defines lexemes rather than sentences. For instance,
+$1 ~ 2$ would match $1 ~ 2$ with any number of blanks in between, but
+$1 ~ & ~ 2$ would only match $12$ (with no blanks between the digits).
+.PQ
+.EQ
+delim off
+.EN
+.S
+.FB
+top :=
+ \h'0.43c'  decl ( `;' top ) *
+ \h'0.3c' | expr ( `;' top ) *
+ \h'0.3c' | \(*e
+
+program := decl + expr
+
+decl :=
+ \h'0.43c'  `val' pat `=' expr ( `and' pat `=' expr ) *
+ \h'0.3c' | `fun' id curried_match ( `and' id curried_match ) *
+ \h'0.3c' | `type' id `=' cons ( `|' cons ) *
+ \h'0.3c' | `exception' :id ( `and' :id ) *
+ \h'0.3c' | `local' ldecls `in' ldecls `end'
+ \h'0.3c' | `infix' fdecl ( `,' fdecl ) *
+ \h'0.3c' | `infixr' fdecl ( `,' fdecl ) *
+ \h'0.3c' | `nonfix' id ( `,' id ) *
+
+fdecl :=
+ \h'0.43c'  id `=' id
+ \h'0.3c' | id `<' id
+ \h'0.3c' | id `>' id
+
+cons :=
+ \h'0.43c'  :id
+ \h'0.3c' | :id `(' id ( `,' id ) * `)'
+
+ldecls := ldecl ( `;' ldecls ) *
+
+ldecl :=
+ \h'0.43c'  `val' pat `=' expr ( `and' pat `=' expr ) *
+ \h'0.3c' | `fun' id curried_match ( `and' id curried_match ) *
+
+curried_match :=
+ \h'1.05c'  guarded_pat + '=' expr
+ \h'0.3c'  ( `|' guarded_pat + `=' expr ) *
+
+match := guarded_pat `=' expr ( `|' guarded_pat `=' expr ) *
+
+guarded_pat :=
+ \h'0.43c'  pat
+ \h'0.3c' | pat `where' or_expr
+
+pat := pat_or
+
+pat_or :=
+ \h'0.43c'  pat_also
+ \h'0.3c' | pat_or 'or' pat_also
+
+pat_also :=
+ \h'0.43c'  pat_infix
+ \h'0.3c' | pat_also 'or' pat_infix
+
+pat_infix :=
+ \h'0.43c'  pat_funapp
+ \h'0.3c' | pat_infix id pat_infix
+
+pat_funapp :=
+ \h'0.43c'  pat_primary
+ \h'0.3c' | pat_funapp pat_primary
+
+pat_primary :=
+ \h'0.43c'  unit
+ \h'0.3c' | bool
+ \h'0.3c' | int
+ \h'0.3c' | real
+ \h'0.3c' | char
+ \h'0.3c' | str
+ \h'0.3c' | id
+ \h'0.3c' | `_'
+ \h'0.3c' | list_pat
+ \h'0.3c' | tuple_pat
+ \h'0.3c' | :id id
+ \h'0.3c' | :id tuple_pat
+ \h'0.3c' | '(' pat ')'
+
+list_pat :=
+ \h'0.43c'  `\fR[\fP' `\fR]\fP'
+ \h'0.3c' | `\fR[\fP' pat ( `,' pat ) * `\fR]\fP'
+ \h'0.3c' | `\fR[\fP' pat `::' id `\fR]\fP'
+ \h'0.3c' | `\fR[\fP' pat `::' list_pat `\fR]\fP'
+
+tuple_pat := `(' pat ( `,' pat ) + `)'
+
+expr :=
+ \h'0.43c'  case_expr
+ \h'0.3c' | case_expr `<<' expr
+ \h'0.3c' | case_expr `>>' expr
+
+sequence := case_expr ( `;' caseexpr ) *
+
+case_expr :=
+ \h'0.43c'  ifexpr
+ \h'0.3c' | `case' expr `of' match
+
+ifexpr :=
+ \h'0.43c'  raise_expr
+ \h'0.3c' | `if' expr `then' expr `else' expr
+
+raise_expr :=
+ \h'0.43c'  handle_expr
+ \h'0.3c' | `raise' :id
+
+handle_expr :=
+ \h'0.43c'  or_expr
+ \h'0.3c' | or_expr `handle' match
+
+or_expr :=
+ \h'0.43c'  also_expr
+ \h'0.3c' | or_expr `or' also_expr
+
+also_expr :=
+ \h'0.43c'  apply
+ \h'0.3c' | also_expr `also' apply
+
+apply :=
+ \h'0.43c'  infix
+ \h'0.3c' | apply ``' infix
+
+infix :=
+ \h'0.43c'  funapp
+ \h'0.3c' | infix id infix
+
+funapp :=
+ \h'0.43c'  primary
+ \h'0.3c' | funapp primary
+
+
+primary :=
+ \h'0.43c'  unit
+ \h'0.3c' | bool
+ \h'0.3c' | int
+ \h'0.3c' | real
+ \h'0.3c' | char
+ \h'0.3c' | str
+ \h'0.3c' | tuple
+ \h'0.3c' | list
+ \h'0.3c' | id
+ \h'0.3c' | `#' int tuple
+ \h'0.3c' | `#' int id
+ \h'0.3c' | `fn' curried_match
+ \h'0.3c' | `let' ldecls `in' sequence `end'
+ \h'0.3c' | `(' sequence `)'
+
+list :=
+ \h'0.43c'  `\fR[\fP' `\fR]\fP'
+ \h'0.3c' | `\fR[\fP' expr ( `,' expr ) * `\fR]\fP'
+ \h'0.3c' | `\fR[\fP' expr `::' list `\fR]\fP'
+
+tuple := `(' expr ( `,' expr ) + `)'
+
+unit := `(' `)'
+
+bool :=
+ \h'0.43c'  `true'
+ \h'0.3c' | `false'
+
+int := 
+ \h'0.43c'  natural
+ \h'0.3c' | `~' & natural
+
+natural :=
+ \h'0.43c'  digit
+ \h'0.3c' | digit & natural
+
+real :=
+ \h'0.43c'  positive_real
+ \h'0.3c' | `~' & positive_real
+
+positive_real :=
+ \h'0.43c'  int & `.' & int
+ \h'0.3c' | int & `e' & int
+ \h'0.3c' | int & `.' & int & `e' & int
+
+char := `#"' & <c> & `"'
+
+str := `"' & <c> * & `"'
+
+:id := ':' & name
+
+id :=
+ \h'0.43c'  name
+ \h'0.3c' | opname
+
+name :=
+ \h'0.43c'  sym_char
+ \h'0.3c' | sym_char & sym_chars
+
+op_name :=
+ \h'0.43c'  op_char
+ \h'0.3c' | op_char & op_name
+
+sym_char :=
+ \h'0.43c'  `a' | ... | `z'
+ \h'0.3c' | `A' | ... | `Z'
+ \h'0.3c' | `:' | `_' | `''
+
+sym_chars :=
+ \h'0.43c'  sym_char
+ \h'0.3c' | digit
+ \h'0.3c' | sym_chars & sym_chars
+
+op_char :=
+ \h'0.43c'  `!' | `@' | `$' | `%' | `^'
+ \h'0.3c' | `&' | `*' | `\(mi' | `+' | `<'
+ \h'0.3c' | `=' | `>' | `/' | `~' | ``'
+
+digit :=
+ \h'0.43c'  `0' | `1' | `2' | `3' | `4'
+ \h'0.3c' | `5' | `6' | `7' | `8' | `9'
+.FE
+.EQ
+delim $$
+.EN
+.ft H
+.sp -1
+.TL "" \"XXX
+.bp \"XXX
+.SH "mLite and Scheme Functions"
+.X RB
+.S
+.TS
+box tab(:);
+lfHB lfHB
+lfI  lfH .
+mLite:Scheme
+c_alphabetic:char-alphabetic
+c_downcase:char-downcase
+c_lower:char-lowercase
+c_numeric:char-numeric
+c_upcase:char-upcase
+c_upper:char-uppercase
+c_whitespace:char-whitespace
+chr:integer->char
+div:quotient
+eof:eof-object?
+explode:string->list
+instream:open-input-file
+newstr:make-string
+newvec:make-vector
+ord:char->integer
+outstream:open-output-file
+peekc:peek-char
+print:display
+readc:read-char
+rem:remainder
+.TE
+.SH "Differences to ML"
+.S
+.LB
+.LI "The module language is completely absent."
+.LI "There is no static type system."
+This
+.I may
+change, though.
+.LI "Lists are heterogenous, this"
+.I may
+also change.
+.LI "Function names are not repeated in $fun$ definitions, e.g.:"
+.br
+$fun ~ not ~ true = false ~ | ~ _ = true$
+.br
+instead of
+.br
+$fun ~ not ~ true = false ~ | ~ not ~ _ = true$.
+.LI "An equal sign separates the pattern from the body in $fn$, e.g.:"
+.br
+$fn ~ x = x$ instead of $fn ~ x => x$.
+.LI "Currying cannot be combined with multiple patterns, e.g."
+the function
+.br
+.EQ
+fun ~ p ~ x ~ 0 = 1 ~ | ~ x ~ y = p ~ x ~ (y - 1)
+.EN
+.br
+would have to be written using a tuple as argument:
+.br
+.EQ
+fun ~ p ~ (x, 0) = 1 ~ | ~ (x, y) = p ~ (x, y - 1)
+.EN
+.LI "There are implicit and explicit guards, e.g.:"
+.br
+$fun ~ f ~ (a,b) ~ where ~ a<b = "..."$
+.br
+or
+.br
+$fun ~ f ~ x<0 = "..."$
+.LI "All user-defined types and constructors must begin with a colon, e.g.:
+$":cons"$, $":node"$, etc.
+.LI "Algebraic types are declared with the"
+$"type"$ keyword instead of $datatype$, and the declaration syntax is
+different, e.g.
+.br
+.EQ
+"type" ~ ":list" = ":nil" ~ | ~ ":cons" ~ (x, ":list")
+.EN
+.br
+instead of
+.br
+$datatype ~ 'a ~ list = nil ~ | ~ cons ~ of ~ 'a * 'a ~ list$
+.LI "Exceptions are just atomic types, so $exception ~ ":exn"$
+is equal to
+.EQ
+"type" ~ :exn = :exn.
+.EN
+.LI "Only $val$ and $fun$ are allowed in the declaration parts of"
+$let$ and $local$.
+.LI "There are no $val ~ rec$ declaration, $fun$ must be used instead."
+.LI "To concatenate strings, the overloaded $@$ operator is used instead
+of the $"^"$ operator (which is used for exponentiation).
+.LI "Logical or is named $or$ instead of $orelse$."
+.LI "Logical and is named $also$ instead of $andalso$."
+.LI "The $~<$, $~<=$, $~<>$, $~=$, $~>$, and $~>=$ operators implement"
+case-insensitive lexical comparison.
+.LE
+.PA
+See the mLite Function Summary (pg \n(R3) for an overview of predefined
+mLite functions. The function library differs largely from ML's.
+.PQ
+.sp -1
+.TL ""
+.bp
+.SH "References"
+.S
+.ta 0.8i
+[DEFSML]	Robin Milner, et al.
+.br
+	``The Definition of Standard ML (Revised)''
+.br
+	MIT Press, 1997
+.S
+[HOL14]	Nils M Holm
+.br
+	``Implicit Guard Expressions in
+.br
+	\h'0.07c' Functional Programming Languages''
+.br
+	Self-published, 2014
+.S
+[R4RS]	William Clinger and Jonathan Rees (Editors)
+.br
+	``Revised(4) Report on the
+.br
+	\h'0.07c' Algorithmic Language Scheme''
+.br
+	ACM Lisp Pointers IV (July-September 1991)

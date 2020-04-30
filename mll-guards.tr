@@ -1,0 +1,800 @@
+.EQ
+delim $$
+.EN
+.nr pp 11
+.nr sp 12
+.nr tp 14
+.pl 11i
+.ll 7i
+.po 0.75i
+.he ''''
+.fo ''- % -''
+.(l C
+.sz +2
+IMPLICIT GUARD EXPRESSIONS IN
+FUNCTIONAL PROGRAMMING LANGUAGES
+.sp
+Nils M Holm, 2014
+.sp
+.)l
+.2c
+.sh 1 Introduction
+.pp
+Most functional programming languages use
+.i "pattern matching"
+to bind arguments to values. Guard expressions are used in some languages
+to put semantic constraints on patterns, but patterns are syntactically
+separated from guard expressions, which reduces locality (i.e. pattern
+variables and constraints are not in the same place) and unnecessarily
+duplicates code. 
+.pp
+In this paper, the principle of
+.i "implicit guard expressions"
+is introduced, which combines patterns and guard expression in the same
+syntactic construct, thereby creating locality and eliminating redundant
+code.
+.sh 1 "Pattern Matching"
+.pp
+In the following, a small set of objects will be used to explain
+pattern matching. This set consists of
+.i numbers ,
+.i k-tuples ,
+.i lists ,
+and
+.i variables .
+.bu
+A
+.i number
+is a sequence of decimal digits, i.e. an integer.
+.bu
+A
+.i k-tuple
+(or
+.i tuple )
+is an ordered set of
+.i k
+elements. E.g., (a,b,c) is a 3-tuple. Tuples may contain any type of object,
+even tuples. Numbers, lists, and variables are 1-tuples. Parentheses can be
+omitted around 1-tuples.
+.bu
+A
+.i list
+is a sequence of elements of any type, e.g. [a,b,c]. Elements can be
+added to lists using the
+.i cons
+(::) operator: a :: [b] \(-> [a, b].$"" sup 1$
+.(f
+$"" sup 1$ ``a \(-> b'' means ``a evaluates to b''.
+.)f
+.bu
+A
+.i variable
+is denoted by a sequence of alphabetic characters. Variables are bound
+to values by pattern matching.
+.pp
+The pattern matching function $m$ maps a pattern $p$ and an object
+$x$ to a tuple $((v sub {1}, a sub {1}), ...)$, indicating that each
+variable $v sub i$ of $p$ is now bound to the corresponding argument
+$a sub i$ of $x$. For instance:
+.EQ
+m ( [a,b], [1,2] ) ~~ \(-> ~~ ((a,1), (b,2))
+.EN
+.bc
+When a match fails, the function returns $epsilon$
+instead:
+.EQ
+m ( 1,2 ) ~~ \(-> ~~ epsilon
+.EN
+A result of $()$ (0-tuple, unit) indicates that the match
+succeded, but no variables were bound:
+.EQ
+m ( 1,1 ) ~~ \(-> ~~ ()
+.EN
+The matching function $m$ works as follows:
+.bu
+Each number matches itself.
+.bu
+A variable matches any object, binding that object to the variable.
+.bu
+A k-tuple $T sub k,1$ matches another k-tuple $T sub k,2$, if
+both tuples have pairwise equal elements. Only k-tuples of the same
+order (number of elements) match. For example:
+.EQ
+m( (1,2), (1,2) ) ~~ \(-> ~~ ()
+.EN
+.sp -0.5
+.EQ
+m( (1,2), (2,1) ) ~~ \(-> ~~ epsilon
+.EN
+.sp -0.5
+.EQ
+m( (1,2), (1,2,3) ) ~~ \(-> ~~ epsilon
+.EN
+.bu
+A list $L sub 1$ matches another list $L sub 2$, if (1) both lists are
+the empty list $[]$, or (2) $L sub 1 = h sub 1 :: t sub 1$ and
+$L sub 2 = h sub 2 :: t sub 2$ and $m(h sub 1 , h sub 2 ) ~\(!=~ epsilon$
+and $m(t sub 1 , t sub 2 ) ~\(!=~ epsilon$.
+(I.e.: both lists contain pairwise equal elements.)
+.pp
+When matching a list $L$ against a pattern $p$ containing the constructor
+$::$, the constructor decomposes the value $L$ into the first element of
+the list and the rest of the list and optionally binds the components of
+the list to variables. For example:
+.EQ
+m(1 :: [2], 1 :: [2]) ~~ \(-> ~~ ()
+.EN
+.sp -0.5
+.EQ
+m(1 :: [2], [1, 2]) ~~ \(-> ~~ ()
+.EN
+.sp -0.5
+.EQ
+m(1 :: x, [1, 2, 3]) ~~ \(-> ~~ ((x, [2,3]))
+.EN
+.sp -0.5
+.EQ
+m(h ~::~ t, [1, 2, 3]) ~~ \(-> ~~ ((h,1), (t,[2,3]))
+.EN
+.sh 1 "Building Functions with Pattern Matching"
+.pp
+A tiny subset of the ML programming language$"" sup 2$ will be used to
+demonstrate how to build funtions with pattern matching.
+.(f
+$"" sup 2$ See ``The Definition of Standard ML'' by Milner, et al, MIT
+Press 1997.
+.)f
+Generally, a
+.i function
+$f$ of patterns $p sub 1 , ...$ to expressions $x sub 1 , ...$ is defined
+as follows:
+.EQ
+fun ~ f ~ p sub 1 = x sub 1 ~ | ~ ...
+.EN
+where the vertical bar denotes a logical ``or''. In the function application
+.EQ
+f ~ a
+.EN
+the argument $a$ is matched against each pattern $p sub i$ of $f$, and
+the expression $x sub i$ associated with the first matching pattern is
+evaluated with the bindings established by $m$ in effect. For example,
+the following program implements the power function ($x$ raised to the
+power of $y$):
+.EQ I
+fun ~ P ~ (x, 0) mark = 1
+.EN
+.sp -1
+.EQ I
+      | ~ (x, y) lineup = x * P (x, y-1)
+.EN
+.sp
+.sh 1 "Guarded Patterns"
+.pp
+A
+.i guard
+is an expression that belongs to the pattern part rather than the
+expression part of a function. It puts some semantic constraints on
+the values a pattern will match. The problem guards solve is as
+follows:$"" sup 3$
+.(f
+$"" sup 3$ The $gcd$ function computes the greatest common
+divisor of $a$ and $b$ using the Euclidean algorithm.
+.)f
+.EQ I
+fun ~ gcd ~ (a, 0) mark = a
+.EN
+.sp -1
+.EQ I
+| ~ (0, b) lineup = b
+.EN
+.sp -1
+.EQ I
+| ~ (a, b) lineup = if ~ a<b ~ then
+.EN
+.sp -1
+.EQ I
+fwd 750 ~ gcd ~(a, b ~mod~ a)
+.EN
+.sp -1
+.EQ I
+fwd 650 ~ else
+.EN
+.sp -1
+.EQ I
+fwd 750 ~ gcd ~(b, a ~mod~ b)
+.EN
+.pp
+Here the otherwise declarative nature of the program is
+disturbed by making the distinction between the cases
+$a<b$ and $a\(>=b$ on the
+.i expression
+side of the function. In a mathematical definition, though,
+the distinction would be made like this:
+.EQ
+gcd (a,b) ~ = ~ left {
+lpile { {~ a }
+above {~ b }
+above {~ gcd (a, b ~mod~ a) }
+above {~ gcd (b, a ~mod~ b) } }
+lpile { { ~~ if ~ b = 0}
+above {~~ if ~ a = 0}
+above {~~ if ~ a < b}
+above {~~ roman otherwise} }
+.EN
+.pp
+I.e. there is only a pattern and an expression side, and nothing
+``in between'', like the ``if'' in the above program. Using guard
+expressions, the mathematical defintion can be translated directly
+to a corresponding program:$"" sup 4$
+.(f
+$"" sup 4$ The
+.i where
+syntax is not part of Standard ML.
+.)f
+.EQ I
+fun ~ gcd ~ mark (a, 0) = a
+.EN
+.sp -1
+.EQ I
+| ~ lineup (0, b) = b
+.EN
+.sp -1
+.EQ I
+| ~ lineup (a, b) ~ where ~ a < b
+.EN
+.sp -1
+.EQ I
+fwd 605 = gcd ~(a, b ~mod~ a)
+.EN
+.sp -1
+.EQ I
+| ~ lineup (a, b) = gcd ~(b, a ~mod~ b)
+.EN
+.pp
+Guards also allow to use the same basic (unguarded) pattern multiple
+times, but each time with different constraints.
+.pp
+In the above extension of the ML language,$"" sup 5$
+.(f
+$"" sup 5$ See ``The mLite Language'' by Holm, 2014
+.)f
+the conditional expression
+.i c
+after the
+.i where
+keyword limits the case of the function to values that match the
+pattern
+.i and
+satisfy the condition
+.i c .
+So the third case of $gcd$ is only selected when $a<b$ holds. Otherwise,
+the final case, without any limiting guard, is chosen.
+.pp
+The guard mechanism described here so far will be called an
+.i "explicit guard" ,
+because it uses an explicit expression, following the
+.i where
+keyword, to formulate the limiting condition.
+.pp
+While explicit guards are a general and flexible mechanism for
+specifying guard expressions, they can be cumbersome in some simple
+cases. For instance:
+.EQ I
+signum ~ mark x ~ where ~ x < 0 = "" tilde 1
+.EN
+.sp -1
+.EQ I
+| ~ lineup x ~ where ~ x > 0 = 1
+.EN
+.sp -1
+.EQ I
+| ~ lineup x = 0
+.EN
+.sh 1 "Implicit Guards"
+.pp
+Under certain conditions, the guard expressions can be pulled into the
+pattern, so that variables of the guard expression become variables of
+the pattern at the same time. This will be called an
+.i "implicit guard" ,
+because the guard is contained implicitly in the pattern.
+.pp
+Using implicit guards, the
+.i signum
+function can be written this way:
+.EQ I
+signum ~ mark x < 0 = "" tilde 1
+.EN
+.sp -1
+.EQ I
+| ~ lineup x > 0 = 1
+.EN
+.sp -1
+.EQ I
+| ~ lineup x fwd 162 = 0
+.EN
+.pp
+I.e. ``signum
+.i of
+$x<0$ is $-1$'', etc.
+.pp
+Implicit guards allow to apply conditions
+.i "on the spot"
+inside of a pattern, which is more concise than explicit guards and
+increases the locality of the guard expressions, because they do not
+have to be moved to a separate clause.
+.pp
+Here is another example:$"" sup 6$
+.(f
+$"" sup 6$ Of course, this implementation is na\(:ive, it only serves
+the purpose of demonstrating the use of an implicit guard.
+.)f
+.EQ I
+fun ~ filter ~ (f, mark []) = []
+.EN
+.sp -1
+.EQ I
+| ~ (f, lineup f ~ h ~::~ t) = h ~ :: ~ filter (f, t)
+.EN
+.sp -1
+.EQ I
+| ~ (f, lineup h ~::~ t) = filter (f, t)
+.EN
+.pp
+The
+.i filter
+function extracts objects satisfying the property $f$ from a list,
+e.g.:$"" sup 7$
+.(f
+$"" sup 7$ The syntax $fn~p = x$ defines an anonymous function of a
+pattern $p$ to an expression $x$.
+.)f
+.EQ
+filter ((fn ~ x = x < 0), [1,"" tilde 2,3, "" tilde 4,5]) ~~ \(->
+~~ ["" tilde 2, "" tilde 4]
+.EN
+.pp
+It uses the implicit guard $f~h$ in the pattern $(f, f~h~::~t)$ to
+select matching elements from the list. Because function application
+binds stronger than the :: operator, the predicate $f$ is applied to
+the first element of the list, and the pattern matches only if
+$f~h$ returns truth.
+.pp
+While implicit guards are more concise and more local than explicit
+guards, they do not offer the same degree of flexibility.
+.pp
+These are the conditions under which implicit guards may be used:
+.bu
+No two variables of the same pattern may be combined in the same guard.
+.bu
+Only one variable may appear in an infix expression in a guard.
+.bu
+In a function application, the pattern variable must be the rightmost
+component.
+.bu
+Multiple implicit guard expressions may appear in a tuple or list, as
+long as they are independent and obey the above rules.
+.pp
+For example, due to the first rule, the explicit guard
+.EQ
+(a, b) ~ where ~ a < b
+.EN
+in the
+.i gcd
+function cannot be converted to an implicit guard, because it combines
+the pattern variables $a$ and $b$ in the expression $a<b$.
+.pp
+Implicit guards of the form $a~R~b$, where $R$ is an infix operator
+and both $a$ and $b$ are variables, cannot be used, because it is not
+possible to determine which one of the variables would be the pattern
+variable.$"" sup 8$
+.(f
+$"" sup 8$ One of the variables could be chosen by convention,
+but even then, more complex formulae would render this approach
+impractical.
+.)f
+.pp
+In a function application, the rightmost component is considered to
+be the pattern part. In all of the expressions $f~x$, $f~g~x$, and $f~(g~x)$,
+the $x$ would be the pattern variable.
+.pp
+.b Note:
+Because function application has the same syntax as currying and the
+equal operator ($=$) is used to separate function bodies from patterns
+in ML, implicit guards using the $=$ operator or function application have
+to be parenthesized:
+.EQ
+fun ~f ~x = y ~~~roman equals~~~ fun ~f = fn ~x = y
+.EN
+.sp -0.5
+.EQ
+fun ~(f ~x) = y ~~~roman equals~~~ fun ~x ~where ~f ~x = y
+.EN
+.sp -0.5
+.EQ
+fun ~ f ~x = 0 = y ~~~roman equals~~~ fun ~x = (0 = y)
+.EN
+.sp -0.5
+.EQ
+fun ~ f (x = 0) = y ~~roman equals~~ fun ~x ~ where ~ (x = 0) = y
+.EN
+.sh 1 Implementation
+.pp
+Each implicit guard can be rewritten as a pattern and an
+explicit guard:
+.EQ
+f~h~::~t ~~=~~ h~::~t ~where~ f~h
+.EN
+.pp
+This conversion will be formalized in the following by devising a function
+$rho$ of an implicit guard to a tuple of a pattern and an explicit guard
+expression:
+.EQ
+rho (implicit) ~~->~~ (pattern, explicit)
+.EN
+Furthermore, the functions $P$ and $G$ will be used to refer to the
+pattern and guard part of the resulting tuple:
+.EQ I
+P (pattern, guard) mark ~~->~~ pattern
+.EN
+.sp -0.5
+.EQ I
+G (pattern, guard) mark ~~->~~ guard
+.EN
+.pp
+So, for instance:
+.EQ I
+rho (x < 0) ~ mark ~~->~~ (x, x<0)
+.EN
+.sp -0.5
+.EQ I
+P ( rho (x < 0) ) lineup ~~->~~ x
+.EN
+.sp -0.5
+.EQ I
+G ( rho (x < 0) ) lineup ~~->~~ x<0
+.EN
+.pp
+The $rho$ function is defined as follows:
+.EQ I
+rho (number) mark ~~->~~ (number, \(es)
+.EN
+.sp -0.5
+.EQ I
+rho (variable) lineup ~~->~~ (variable, \(es)
+.EN
+.pp
+The empty set sign \(es denotes the absence of a
+guard expression in a tuple. In some contexts, it can be interpreted
+as
+.EQ
+G(p, \(es) ~~->~~ true
+.EN
+.pp
+I.e., the tuple $(p,\(es)$ indicates an unguarded pattern $p$.
+.pp
+The most simple case of function application is the combination ($cdot$)
+of two variables:
+.EQ
+rho (f ~ x) mark ~~=~~ rho (f) cdot rho (x)
+.EN
+.sp -1
+.EQ
+lineup ~~=~~ (f,\(es) cdot (x,\(es)
+.EN
+.sp -1
+.EQ
+lineup ~~=~~ (x, f~x)
+.EN
+.pp
+Note that it is always the pattern of the
+.i "righthand side"
+of $( cdot )$ that determines the pattern component of the result.
+More generally, the conversion of function application is defined as:
+.EQ
+rho (x ~ y) mark ~~=~~ (P ( rho ~ y ), x' ~ y')
+.EN
+.pp
+where
+.EQ (C1)
+x' = left { lpile { ~ { G ( rho x ) } above { ~ P ( rho x ) } }
+lpile { { ~~ if ~ G ( rho x ) ~\(!=~ \(es } above { ~~ roman otherwise } }
+.EN
+.pp
+and
+.EQ (C2)
+y' = left { lpile { ~ { G ( rho y ) } above { ~ P ( rho y ) } }
+lpile { { ~~ if ~ G ( rho y ) ~\(!=~ \(es } above { ~~ roman otherwise } }
+.EN
+.pp
+So whenever a guard is available, it will be used and otherwise the
+corresponding pattern will be used. A pattern is always available, because
+\(es never appears in a the pattern position of a tuple returned by $rho$.
+.pp
+Using the above rules and left-associative function application,
+higher order application becomes:
+.EQ I
+rho (f~g~x) mark = rho (f~g) cdot rho x
+.EN
+.sp -1
+.EQ I
+lineup = (g, f~g) cdot (x, \(es)
+.EN
+.sp -1
+.EQ I
+lineup = (x, (f~g) x)
+.EN
+.pp
+Function composition becomes:
+.EQ I
+rho (f~(g~x)) mark = rho f cdot rho (g~x)
+.EN
+.sp -1
+.EQ I
+lineup = (f, \(es) cdot (x, (g~x))
+.EN
+.sp -1
+.EQ I
+lineup = (x, f (g~x))
+.EN
+.pp
+So, generally:
+.EQ I
+rho (f sub 1 f sub 2 ... x) mark = (x, ((f sub 1 f sub 2 ) ...) x)
+.EN
+.sp -0.5
+.EQ I
+rho (f sub 1 (f sub 2 ... x)) lineup = (x, (f sub 1 (f sub 2 ... x)))
+.EN
+.pp
+The general forms of infix operation are the following ($R$ denotes
+an infix operator):
+.EQ I
+~~ rho ( id ~R~ x ) mark ~~=~~ (id, (id ~R~ x))
+.EN
+.sp -0.5
+.EQ I
+rho ( x ~R~ id ) lineup ~~=~~ (id, (x ~R~ id))
+.EN
+.sp -0.5
+.EQ I
+rho ( id ~R~ id ) lineup ~~=~~ (id, (id ~R~ id))
+.EN
+.sp -0.5
+.EQ I
+rho ( id sub 1 ~R~ id sub 2 ) lineup ~~=~~ error
+.EN
+.pp
+That is, an identifier (variable) may appear on either side of the
+operator, but if it appears on both sides, it must be the same
+identifier. Two different identifiers in an infix operation are
+an error.
+.pp
+More complex operands to infix operators, including chains of infix
+operations, are covered as follows:
+.EQ
+rho (x ~R~ y) mark ~~=~~ (p, x' ~R~ y')
+.EN
+.pp
+where
+.EQ
+p = left { lpile { ~ { P( rho x) } above ~ { P( rho y) } }
+lpile { { ~~ if ~ P( rho x) ~ roman "is an identifier" }
+above { ~~ roman otherwise } }
+.EN
+.pp
+and $x'$ and $y'$ are formed as described in (C1) and (C2).
+.pp
+Naturally, precedence and associativity rules of infix operators have to
+be obeyed. In the following, $R sub n$ denotes a left-associative infix
+operator of precedence $n$, where larger values denote stronger binding
+to operands. Then,
+.EQ
+rho (x ~R sub 1~ y ~R sub 1~ z) mark = rho ((x ~R sub 1~ y) ~R sub 1~ z)
+.EN
+.sp -0.5
+.EQ
+rho (x ~R sub 2~ y ~R sub 1~ z) lineup = rho ((x ~R sub 2~ y) ~R sub 1~ z)
+.EN
+.sp -0.5
+.EQ
+rho (x ~R sub 1~ y ~R sub 2~ z) lineup = rho (x ~R sub 1~ (y ~R sub 2~ z))
+.EN
+.pp
+$R sub R$ denotes a right-associative operator:
+.EQ
+rho (x ~R sub R~ y ~R sub R~ z) lineup = rho (x ~R sub R~ (y ~R sub R~ z))
+.EN
+.pp
+Parentheses override associativity and precedence:
+.EQ
+rho ((x ~R sub 1~ y) ~R sub 2~ z) mark = rho ((x ~R sub 1~ y) ~R sub 2~ z)
+.EN
+.sp -0.5
+.EQ
+rho (x ~R sub 2~ (y ~R sub 1~ z)) mark = rho (x ~R sub 2~ (y ~R sub 1~ z))
+.EN
+.sp -0.5
+.EQ
+rho (x ~R sub 1~ (y ~R sub 1~ z)) mark = rho (x ~R sub 1~ (y ~R sub 1~ z))
+.EN
+.sp -0.5
+.EQ
+rho ((x ~R sub R~ y) ~R sub R~ z) mark = rho ((x ~R sub R~ y) ~R sub R~ z)
+.EN
+.pp
+Without parentheses function application binds stronger than infix operators:
+.EQ
+rho (f ~ x + 1) = rho ( (f ~ x) + 1)
+.EN
+.pp
+Of course, this means that an actual implementation has to consider
+the properties of pre-defined operators and, in the case of extensible
+languages like ML, also the properties of user-defined operators.
+.pp
+In the context of implicit guard conversion, logic operators, such as ML's
+.i orelse
+and
+.i andalso ,
+can be considered to be low-precedence infix operators.
+.pp
+More high-level constructs, like
+.i if-then-else ,
+are best kept in function bodies, and should not be used in guards
+anyway, because they would blur the border between guards and function
+bodies. Guard expressions, both implicit and explicit, should be short
+and easily comprehensible forms.
+.pp
+k-tuples are converted as follows:
+.EQ
+rho (x sub 1 , x sub 2 , ...) ~~=~~ (p, g)
+.EN
+.pp
+where
+.EQ
+p ~~=~~ ( P( rho x sub 1 ), P( rho x sub 2 ), ...)
+.EN
+.pp
+and
+.EQ
+g ~~=~~ (G( rho x sub 1 )) ~ times ~ (G( rho x sub 2 )) ~ times ...
+.EN
+.pp
+and
+.EQ
+G (x, \(es) = true "" sup 9
+.EN
+.(f
+$"" sup 9$ Of course, an actual implementation would omit segments of
+the form ``$times ~ true$'', because $x~times~true = x$.
+.)f
+.pp
+Here $times$ denotes the logical ``and'' operation, i.e. the explicit guard
+of a tuple is the conjunction of all implicit guards in the tuple.
+.pp
+Lists are converted in the same way as tuples:
+.EQ
+rho [x sub 1 , x sub 2 , ...] ~~=~~ (p, g)
+.EN
+.pp
+where
+.EQ
+p ~~=~~ [ P( rho x sub 1 ), P( rho x sub 2 ), ...]
+.EN
+.sp -0.5
+.EQ
+g ~~=~~ (G( rho x sub 1 )) ~ times ~ (G( rho x sub 2 )) ~ times ...
+.EN
+.pp
+Constructors like ::, finally, are part of the pattern, but their
+arguments may contain implicit guards. Hence:
+.EQ
+rho (x sub 1 ~::~ x sub 2 ) ~~=~~ (p, g)
+.EN
+.pp
+where
+.EQ
+p = P( rho x sub 1 ) ~::~ P( rho (x sub 2 ))
+.EN
+.sp -0.5
+.EQ
+g = (G( rho x sub 1 )) ~times~ (G( rho (x sub 2 )))
+.EN
+.sh 1 Examples
+.EQ L
+rho (f ~ x = g ~ x) mark ~~=~~ rho ( rho (f ~ x) = rho (g ~ x))
+.EN
+.sp -1
+.EQ L
+lineup ~~=~~ rho ( (x, f ~ x) = (x, g ~ x))
+.EN
+.sp -1
+.EQ L
+lineup ~~=~~ (x, f ~ x = g ~ x)
+.EN
+.sp -1
+.EQ L
+lineup ~~=~~ x ~where~ f ~ x = g ~ x
+.EN
+.hl
+.EQ L
+rho [x > 0, y ~mod~ 2 = 0] = (p, g)
+.EN
+.pp
+where
+.EQ L
+p mark ~~=~~ [ P( rho (x > 0)), P( rho (y ~mod~2 = 0)) ]
+.EN
+.sp -0.5
+.EQ L
+lineup ~~=~~ [ x, y ]
+.EN
+.pp
+and
+.EQ L
+g mark ~~=~~ (G( rho (x > 0))) times (G( rho (y ~mod~2 = 0)))
+.EN
+.sp -0.5
+.EQ L
+lineup ~~=~~ (x > 0) ~times~ (y ~mod~ 2 = 0)
+.EN
+.hl
+.EQ L
+rho (f ~ h ~ :: ~ t) mark ~~=~~ (h ~::~ t, (f ~ h) ~times~ true)
+.EN
+.sp -0.5
+.EQ L
+lineup ~~=~~ (h ~::~ t, f ~ h)
+.EN
+.sh 1 Conclusion
+.pp
+In functions where independent constraints are placed on individual
+variables of a pattern, implicit guard expressions deliver the desired
+improvement: they eliminate redundant code and increase locality,
+because implicit guard expressions are part of the pattern. In more
+complex cases, explicit guard expressions must be used.
+.pp
+All implicit guard expressions can be rewritten to explicit ones by
+the algorithm presented in this paper, making it easy to extend languages
+that already provide explicit guards.
+.pp
+Work to be done includes:
+.bu
+Special care has to be taken when combining currying with implicit guard
+patterns, because a compiler has to identify common patterns in functions
+like
+.EQ
+fun ~ p ~ mark x ~ 0 = 1
+.EN
+.sp -1
+.EQ
+    | ~ lineup x ~ y = p ~ x ~ (y - 1)
+.EN
+If the pattern $x$ would contain implicit guards in this case, the
+compiler would still have to be able to identify the common pattern
+$x$ in order to generate a properly curried function. The mLite language
+currently solves this problem by not allowing the combination of currying
+and alternative patterns, but this is to be improved.
+.sp
+.bu
+Multiple identifiers in infix expressions should be dealt with in some
+meaningful way. One option would be to create a tuple of two identifiers,
+so that the implicit guard $(a<b)$ would translate to
+$(a, b) ~where~ (a < b)$. However, this approach looks rather uninituitive.
+Other alternatives have to be examined.
+.sp
+.bu
+The conversion algorithm is to be adapted to syntactical constructs not
+covered here, like more complex (multi-argument) constructors, etc.
+.sp
+.bu
+As the guard conversion algorithm creates guard expressions in
+conjunctive normal form,$"" sup 10$ the resulting guard expressions
+.(f
+$"" sup 10$ Logic operators may appear in clauses in the implementation
+described here, so some additional conversion may be necessary.
+.)f
+may be suitable for automatic ordering by specificity, allowing to
+formulate programs in a truly declarative form, where the order of
+clauses in a pattern matching function does not matter. This is to
+be investigated.
+

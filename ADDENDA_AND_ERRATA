@@ -1,0 +1,102 @@
+
+	ADDENDA AND ERRATA TO "THE MLITE PROGRAMMING LANGUAGE"
+
+	The following language constructs are not covered by the manual
+	or have been modified since the last release of the manual.
+
+
+	UNDOCUMENTED FUNCTIONS
+
+	error (s1, x) -- print error message "s1: x" and abort program
+	execution.
+
+	real_mant r -- return mantissa of real (r for integers)
+	real_exp r -- return exponent of real (0 for integers).
+
+	argv n -- return n'th command line argument or false.
+
+	environ s -- return value of environment variable s or false.
+
+	system s -- run shell command s and return exit code.
+
+
+	NTH-ROOT FUNCTION
+
+	The library function nthroot (n,x) computes the n'th root of x.
+
+
+	APPROXIMATELY EQUAL OPERATOR
+
+	Unlike stated in the manual, the ~= operator compares real
+	numbers with one digit of slack, so
+
+	1.4142  = 1.4143  -->  false
+	1.4142 ~= 1.4143  -->  true
+
+	~= is useful for comparison in real number functions that
+	converge against a fixed point, but may oscillate at the
+	fixed point.
+
+	One digit of slack also means that 1.0 ~= 9.0
+	(or even 1e6 ~= 2e6!), so be careful!
+
+	x ~<> y means (not (x ~= y)).
+
+
+	GROUPING IN IMPLICIT GUARDS
+
+	No grouping is currently allowed in implicit guards. E.g.
+	fun f (a < 0) = ...  will work, but  fun f (a < (0)) = ...
+	will not. This is a bug, but unfortunately the fix is
+	nontrivial.
+
+
+	REFERENCES TO LOCAL SYMBOLS IN IMPLICIT GUARDS
+
+	Even if this is not explicitly described in the manual,
+	implicit guard expressions can reference all variables
+	bound in the pattern containing the guard. E.g.:
+
+        fun mem (x, []) = false
+	      | (x = a, a :: as) = true
+	      | (x, _ :: as) = mem (x, as)
+
+	works fine, because  (x = a, a :: as)
+	is equivalent to     (x, a :: as) where (x = a) .
+
+	(Note, though, that (a = x, a :: as) would NOT work, because
+	 it would be short for (a, a :: as) where (a = x), so a would
+	 appear two times and the pattern and x would be unbound!)
+
+	This has been pointed out by Bruce Axtens. Thanks!
+
+
+	MULTI-CHARACTER LITERALS
+
+	The following multi-character char literals exist in addition
+	to #"space" and #"newline":
+
+	#"\""		(")
+	#"\\"		(\)
+	#"baskslash"	(\)
+	#"quote"	(")
+	#"tab"		(ASCII 9, HT)
+
+
+	NEGATIVE EXPONENTS IN NUMBER LITERALS
+
+	Real number literal may have negative exponents, e.g.:
+
+	1.23e~5
+
+
+	STREAM OPERATORS
+
+	The stream operators associate to the right, so
+
+	instream "foo" >> outstream "bar" << function ()
+
+	is a valid program that applies function with input taken from
+	"foo" and output written to "bar".
+
+

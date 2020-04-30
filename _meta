@@ -1,0 +1,60 @@
+mll.tr:6: can't open `_xref.tr': No such file or directory
+mll.tr:32: can't open `_toc.tr': No such file or directory
+C;2.;Introduction;2
+R;.nr R8 2
+C;2.1;Pattern Matching;3
+C;2.2;Syntax and Informal Semantics;4
+mll.tr:237: warning [p 4, 6.6i]: cannot adjust line
+C;2.2.1;Function Application;5
+C;2.2.2;Conditional Evaluation;6
+C;2.2.3;Guarded Patterns;7
+C;2.2.4;Exception Handling;9
+R;.nr R5 9
+eqn:mll.tr:817: unquoted escape
+eqn:mll.tr:821: unquoted escape
+eqn:mll.tr:826: unquoted escape
+C;2.2.5;Input and Output;10
+C;2.3;Declaration Syntax and Semantics;11
+C;2.3.1;Operator Declarations;14
+C;2.3.2;Algebraic Types;15
+R;.nr R6 15
+C;3.;The Lite Abstract Machine;18
+C;3.1;LAM Syntax;18
+C;3.1.1;Scheme-Like Syntax;19
+C;3.1.2;Non-Scheme Syntax;20
+C;3.1.3;Scheme-Like Functions;21
+C;3.1.4;Renamed Functions;22
+C;3.1.5;mLite Functions;22
+C;4.;Compiling mLite to LAM;24
+C;4.1;Data Objects;24
+C;4.2;Functions and Application;24
+C;4.3;Expressions;25
+C;4.4;Declarations;26
+C;4.5;Local Declarations;28
+C;4.6;Derived Forms;29
+C;5.;mLite Reference;31
+C;5.1;mLite/LAM Data Objects;31
+R;.nr R4 31
+C;5.2;Predefined Infix Operators;32
+R;.nr R2 32
+C;5.3;Pattern Matching Algorithm;32
+R;.nr R1 32
+C;5.3.1;Implicit Guard Patterns;33
+R;.nr R7 33
+C;5.4;mLite Syntax Summary;35
+C;5.4.1;Declarations;35
+R;.nr RA 36
+C;5.4.2;Expressions;37
+C;5.5;mLite Function Summary;39
+R;.nr R3 39
+C;5.5.1;Arithmetics;39
+C;5.5.2;Structural Operations;42
+C;5.5.3;Type Predicates and Conversion;46
+C;5.5.4;Char Functions;47
+C;5.5.5;Input/Output Functions;48
+C;6.;Appendix;50
+C;6.1;mLite Grammar;50
+C;6.2;mLite and Scheme Functions;56
+R;.nr RB 56
+C;6.3;Differences to ML;56
+C;6.4;References;58

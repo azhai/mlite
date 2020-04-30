@@ -1,0 +1,12 @@
+
+	- fun f ((n rem 3 = 0) or (n rem 5 = 0), sum) = n
+	  compiles to wrong guard.
+	
+	- search for GC leaks
+
+	- write test suite
+
+	? internal exceptions
+
+	- LETREC as macro
+
